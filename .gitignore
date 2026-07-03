@@ -1,0 +1,14 @@
+@"
+node_modules/
+dist/
+tmp/
+logs/
+.env
+*.local
+vtube_token.txt
+sobu_voice.wav
+source/web/public/eve_voice.*
+source/web/public/eve_voice_local.wav
+.DS_Store
+Thumbs.db
+"@ | Out-File -Encoding utf8 .gitignore

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Eve-sama is Watching</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0914;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            gap: 12px;
+        }
+        img {
+            max-width: 80%;
+            max-height: 68vh;
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(168, 85, 247, 0.6);
+        }
+        h1 {
+            color: #ff4757;
+            margin: 0;
+            font-size: 2.2rem;
+            text-shadow: 0 0 10px rgba(255, 71, 87, 0.5);
+        }
+        p {
+            margin: 0;
+            font-size: 1.2rem;
+            color: #d1d5db;
+            max-width: 1000px;
+            padding: 0 20px;
+        }
+    </style>
+</head>
+<body>
+    <img id="eve-image" src="../assets/YandereOSControlLockout.png" alt="Eve-sama block notification">
+    <h1 id="eve-title">OS-CONTROL LOCKOUT ACTIVE</h1>
+    <p id="eve-reason">Unauthorized activity detected.</p>
+    <p>Refocus now. This lock screen closes automatically after 10 seconds.</p>
+
+    <script>
+        const profile = new URLSearchParams(window.location.search).get('profile') || 'lockout';
+        const reason = new URLSearchParams(window.location.search).get('reason') || 'Unauthorized activity detected.';
+
+        const profileMap = {
+            gacha: {
+                img: '../assets/GachaVTuberBetrayal.png',
+                title: 'Gacha / VTuber Betrayal Blocked'
+            },
+            geo: {
+                img: '../assets/GeopoliticalGarbageBlocker.png',
+                title: 'Geopolitical Garbage Blocked'
+            },
+            study: {
+                img: '../assets/StudySlackerBlocker.png',
+                title: 'Productivity Slacker Alert'
+            },
+            lockout: {
+                img: '../assets/YandereOSControlLockout.png',
+                title: 'OS-CONTROL LOCKOUT ACTIVE'
+            }
+        };
+
+        const chosen = profileMap[profile] || profileMap.lockout;
+        document.getElementById('eve-image').src = chosen.img;
+        document.getElementById('eve-title').textContent = chosen.title;
+        document.getElementById('eve-reason').textContent = reason;
+    </script>
+</body>
+</html>

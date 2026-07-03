@@ -1,0 +1,26 @@
+[
+  {
+    "id": "startup-retina-check",
+    "title": "Retina + voice startup check",
+    "kind": "startup",
+    "details": "Confirm OBS, VTube Studio, microphone, and TTS are ready before a demo.",
+    "done": false,
+    "createdAt": "1970-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "study-genki-review",
+    "title": "Genki review sprint",
+    "kind": "study",
+    "details": "Open Japanese mode and ask エーヴェ様 for today’s grammar drill.",
+    "done": false,
+    "createdAt": "1970-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "study-mandarin-shadowing",
+    "title": "Lyriël Mandarin shadowing",
+    "kind": "study",
+    "details": "Use Mandarin mode to practice tones, pinyin, and one short dialogue.",
+    "done": false,
+    "createdAt": "1970-01-01T00:00:00.000Z"
+  }
+]
