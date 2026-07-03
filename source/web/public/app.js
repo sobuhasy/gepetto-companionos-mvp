@@ -479,7 +479,7 @@ form.addEventListener('submit', async (event) => {
   }
 });
 
-addMessage('eve', 'Aetherlink connected. Pick a module, sweetie — this is starting to look like my real control room.');
+addMessage('eve', 'Gepetto CompanionOS Signal Demo is online. Choose a mode, start a task, or save a memory.');
 loadSystemStatus().catch((error) => {
   runtimePill.textContent = error.message;
   runtimePill.className = 'status-pill bad';
