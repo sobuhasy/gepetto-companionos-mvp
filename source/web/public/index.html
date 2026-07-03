@@ -63,7 +63,7 @@
             <option value="rea">Rëa</option>
           </select>
           <label for="prompt" class="sr-only">Your message</label>
-          <textarea id="prompt" name="prompt" placeholder="Type a message for Eve... (Enter to send, Shift+Enter for newline)" rows="3" required></textarea>
+          <textarea id="prompt" name="prompt" placeholder="Type a message for your companion... (Enter to send, Shift+Enter for newline)" rows="3" required></textarea>
           <button id="send-button" type="submit">Send</button>
         </form>
         <div id="image-preview-container" class="hidden">
@@ -88,9 +88,9 @@
             <span class="module-tag">Mic + playback</span>
           </div>
           <div class="control-stack">
-            <label><input id="auto-play-toggle" type="checkbox" checked> Auto-play Eve voice after responses</label>
+            <label><input id="auto-play-toggle" type="checkbox" checked> Auto-play companion voice after responses</label>
             <label><input id="stt-ready-toggle" type="checkbox" checked> Enable browser STT recording button</label>
-            <button id="voice-test" class="secondary-btn" type="button">Play latest Eve voice</button>
+            <button id="voice-test" class="secondary-btn" type="button">Play latest companion voice</button>
           </div>
           <p class="muted">Cloud TTS, local fallback, microphone transcription, and playback routing live here.</p>
         </article>
@@ -131,9 +131,9 @@
 
         <article id="japanese" class="module-card language-card">
           <p class="eyebrow">Japanese</p>
-          <h3>エーヴェ様 mode for Genki</h3>
-          <p>Launch Genki-style grammar, vocab, and sentence correction with Eve’s Japanese persona.</p>
-          <button class="mode-btn" data-mode="eve" data-prompt="エーヴェ様 mode: Please run a Genki-style Japanese study drill with grammar explanation, example sentences, and corrections.">Start Genki drill</button>
+          <h3>Japanese mode for Genki</h3>
+          <p>Launch Genki-style grammar, vocab, and sentence correction with the companion Japanese study mode.</p>
+          <button class="mode-btn" data-mode="eve" data-prompt="Japanese Study mode: Please run a Genki-style Japanese study drill with grammar explanation, example sentences, and corrections.">Start Genki drill</button>
         </article>
 
         <article id="rea" class="module-card language-card">

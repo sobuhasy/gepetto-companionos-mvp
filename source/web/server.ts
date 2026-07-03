@@ -1,4 +1,4 @@
-import { createServer, IncomingMessage, ServerResponse } from 'node:http';
+import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize } from 'node:path';
@@ -9,7 +9,9 @@ import { SystemHealthService } from '../module/SystemHealthService';
 import { MemoryCategory, MemoryRecord, MemorySource } from '../ltm/ltm_interface';
 import { toCompanionMode } from '../companion/CompanionProfile';
 
-const PORT = Number(process.env['PORT'] ?? 3000);
+const DEFAULT_PORT = 3000;
+const PORT = Number(process.env['PORT'] ?? DEFAULT_PORT);
+const MAX_PORT_FALLBACKS = 10;
 const PUBLIC_DIR = join(process.cwd(), 'source', 'web', 'public');
 const TMP_DIR = join(process.cwd(), 'tmp');
 const MEMORY_PATH = join(process.cwd(), 'data', 'ltm', 'memories.jsonl');
@@ -457,6 +459,45 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<v
     }
 }
 
+function listenOnPort(server: Server, port: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const onError = (error: NodeJS.ErrnoException) => {
+            server.off('listening', onListening);
+            reject(error);
+        };
+        const onListening = () => {
+            server.off('error', onError);
+            resolve();
+        };
+
+        server.once('error', onError);
+        server.once('listening', onListening);
+        server.listen(port);
+    });
+}
+
+async function listenWithPortFallback(server: Server, preferredPort: number): Promise<void> {
+    for (let offset = 0; offset <= MAX_PORT_FALLBACKS; offset += 1) {
+        const port = preferredPort + offset;
+
+        try {
+            await listenOnPort(server, port);
+            const fallbackNote = port === preferredPort ? '' : ` (preferred port ${preferredPort} was busy)`;
+            const message = `Gepetto CompanionOS dashboard available at http://localhost:${port}${fallbackNote}`;
+            addLog(port === preferredPort ? 'info' : 'warn', message);
+            console.log(`🌐 ${message}`);
+            return;
+        } catch (error) {
+            const nodeError = error as NodeJS.ErrnoException;
+            if (nodeError.code !== 'EADDRINUSE' || offset === MAX_PORT_FALLBACKS) {
+                throw error;
+            }
+
+            addLog('warn', `Port ${port} is already in use; trying ${port + 1}.`);
+        }
+    }
+}
+
 async function main(): Promise<void> {
     const server = createServer(async (req, res) => {
         const wasApiHandled = await handleApi(req, res);
@@ -472,10 +513,8 @@ async function main(): Promise<void> {
         server.close(() => process.exit(0));
     });
 
-    addLog('info', 'Aetherlink web dashboard booting.');
-    server.listen(PORT, () => {
-        console.log(`🌐 Aetherlink dashboard available at http://localhost:${PORT}`);
-    });
+    addLog('info', 'Gepetto CompanionOS web dashboard booting.');
+    await listenWithPortFallback(server, PORT);
 }
 
 main().catch(async (error) => {

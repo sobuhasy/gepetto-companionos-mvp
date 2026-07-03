@@ -3,23 +3,24 @@
   "version": "1.0.0",
   "description": "Gepetto CompanionOS MVP - a privacy-first multimodal AI companion workspace",
   "keywords": [],
-  "homepage": "https://github.com/sobuhasy/aetherial-eve#readme",
+  "homepage": "https://github.com/sobuhasy/gepetto-companionos-mvp#readme",
   "bugs": {
-    "url": "https://github.com/sobuhasy/aetherial-eve/issues"
+    "url": "https://github.com/sobuhasy/gepetto-companionos-mvp/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sobuhasy/aetherial-eve.git"
+    "url": "git+https://github.com/sobuhasy/gepetto-companionos-mvp.git"
   },
   "license": "ISC",
-  "author": "SobuHasy and Eve Yunii Kaelira",
+  "author": "SobuHasy",
   "type": "commonjs",
   "main": "dist/index/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index/index.js",
+    "start": "node dist/web/server.js",
     "dev": "ts-node source/index/index.ts",
-    "start:web": "node dist/web/server.js"
+    "start:web": "node dist/web/server.js",
+    "start:cli": "node dist/index/index.js"
   },
   "dependencies": {
     "@neosapience/typecast-js": "^0.1.5",
