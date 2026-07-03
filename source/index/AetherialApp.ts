@@ -2,7 +2,7 @@ import { LlmOpenAI } from "../module/LlmOpenAI";
 import { TtsTypeCast } from "../tts/TtsTypeCast";
 import { MicWhisper } from "../stt/MicWhisper";
 import { RobotBody } from "../body/RobotBody";
-import { createRobotBody } from "../body/BodyFactory";
+import { BodyBackend, createRobotBody } from "../body/BodyFactory";
 import { ObsVision } from '../module/ObsVision';
 import { TtsCoqui } from '../tts/TtsCoqui';
 import { getCompanionProfile, toCompanionMode } from '../companion/CompanionProfile';
@@ -26,6 +26,14 @@ type EveResponse = {
     expressionDurationMs?: number;
 }
 
+function toBodyBackend(value: unknown): BodyBackend {
+    if (value === "pico" || value === "hybrid" || value === "vtube") {
+        return value;
+    }
+
+    return "vtube";
+}
+
 export class AetherialApp {
     private eveBrain?: LlmOpenAI;
     private eveVoice?: TtsTypeCast;
@@ -45,7 +53,8 @@ export class AetherialApp {
         this.eveVoice = new TtsTypeCast();
         this.eveVoiceBackup = new TtsCoqui();
         this.eveEars = new MicWhisper();
-        this.eveBody = createRobotBody("hybrid");
+        const bodyBackend = toBodyBackend(process.env["ROBOT_BODY_BACKEND"] ?? "vtube");
+        this.eveBody = createRobotBody(bodyBackend);
         this.eveEyes = new ObsVision();
 
         await this.eveBrain.init();
