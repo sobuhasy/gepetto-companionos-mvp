@@ -63,17 +63,40 @@
 
       <section id="identity" class="module-card identity-card">
         <div class="module-heading">
-          <div><p class="eyebrow">Companion Identity</p><h3>Every companion is born, not selected.</h3></div>
-          <button id="regenerate-profile" class="secondary-btn" type="button">Regenerate demo profile</button>
+          <div>
+            <p class="eyebrow">Companion Identity</p>
+            <h3>Every companion is born, not selected.</h3>
+            <p class="identity-copy">One identity. Many modes.</p>
+          </div>
+          <span id="profile-status" class="module-tag">Loading profile</span>
+        </div>
+        <div class="identity-basics">
+          <span>Native: Aerilonian.</span>
+          <span>Also speaks: English, Japanese, and your native language.</span>
         </div>
         <div class="profile-grid" aria-live="polite">
-          <div><span>Companion name</span><strong id="profile-name">Aerin</strong></div>
-          <div><span>Personality seed</span><strong id="profile-seed">Calm strategist with playful curiosity</strong></div>
-          <div><span>Voice style</span><strong id="profile-voice">Warm, clear, focused</strong></div>
-          <div><span>Memory style</span><strong id="profile-memory">Consent-based highlights and workflows</strong></div>
-          <div><span>Known languages</span><strong id="profile-languages">English, Japanese, Aerilonian</strong></div>
-          <div><span>Daily workflows</span><strong id="profile-workflows">Study sprints, build plans, reflection check-ins</strong></div>
+          <div><span>Companion name</span><strong id="profile-name">Aerin Kaela Novareth</strong></div>
+          <div><span>Origin district</span><strong id="profile-origin">Aerilon, NovaNest district</strong></div>
+          <div><span>Affinity</span><strong id="profile-affinity">luminous memory gardens</strong></div>
+          <div><span>Familiar motif</span><strong id="profile-familiar">Lumicat</strong></div>
+          <div><span>Personality seed</span><strong id="profile-seed">calm, loyal, curious, gently playful, study-oriented</strong></div>
+          <div><span>Native language</span><strong id="profile-native">Aerilonian</strong></div>
+          <div><span>Known languages</span><strong id="profile-languages">Aerilonian, English, Japanese, Romanian</strong></div>
+          <div><span>Memory style</span><strong id="profile-memory">reflective and adaptive</strong></div>
+          <div><span>Voice style</span><strong id="profile-voice">warm, clear, soft, focused</strong></div>
+          <div class="wide-profile-field"><span>Daily workflows</span><strong id="profile-workflows">turn goals into a three-step daily plan; convert study material into active recall prompts</strong></div>
         </div>
+        <form id="companion-profile-form" class="profile-controls">
+          <label>User name<input id="profile-user-name" type="text" autocomplete="name" placeholder="Optional"></label>
+          <label>User native language<input id="profile-native-language-input" type="text" placeholder="Romanian"></label>
+          <label>Preferred tone<select id="profile-tone"><option value="calm">calm</option><option value="playful">playful</option><option value="analytical">analytical</option><option value="protective">protective</option><option value="energetic">energetic</option><option value="poetic">poetic</option></select></label>
+          <label>Preferred affinity<select id="profile-affinity-input"><option value="random">random</option><option value="study">study</option><option value="code">code</option><option value="creativity">creativity</option><option value="emotional support">emotional support</option><option value="productivity">productivity</option></select></label>
+          <label class="seed-field">Seed<input id="profile-seed-input" type="text" placeholder="Optional deterministic seed"></label>
+          <div class="profile-actions">
+            <button id="generate-companion" class="secondary-btn" type="button">Generate Companion</button>
+            <button id="save-companion" class="secondary-btn" type="button">Save Companion</button>
+          </div>
+        </form>
       </section>
 
       <section id="modes" class="module-card">
@@ -81,6 +104,7 @@
           <div><p class="eyebrow">One Companion, Many Modes</p><h3>Switch the same identity into the right working state.</h3></div>
           <span class="module-tag">Investor-safe public labels</span>
         </div>
+        <p id="mode-adaptation-text" class="muted">Aerin is adapting to Productivity Mode. Same companion, focused behavior.</p>
         <div class="mode-grid">
           <article class="mode-card"><i class="fa-solid fa-book-open-reader"></i><h4>Study Mode</h4><p>Active recall, summaries, notes, and quizzes for any topic.</p><button class="mode-btn" data-label="Study Mode" data-mode="study" data-prompt="Study Mode: Help me study one topic using active recall, a concise summary, structured notes, and a tiny quiz.">Start Study Mode</button></article>
           <article class="mode-card"><i class="fa-solid fa-code"></i><h4>Code Mode</h4><p>Explain, debug, refactor, and plan implementation steps.</p><button class="mode-btn" data-label="Code Mode" data-mode="code" data-prompt="Code Mode: Help me explain, debug, refactor, or plan this implementation in clear steps.">Start Code Mode</button></article>

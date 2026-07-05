@@ -78,6 +78,14 @@ const AFFINITIES = [
     'aurora navigation',
 ] as const;
 
+const AFFINITY_HINTS: Record<string, readonly string[]> = {
+    study: ['luminous memory gardens', 'focus stabilization', 'starline calligraphy'],
+    code: ['signal harmonics', 'crystalline resonance', 'starline calligraphy'],
+    creativity: ['dream routing', 'aurora navigation', 'luminous memory gardens'],
+    'emotional support': ['emotional weather', 'focus stabilization', 'crystalline resonance'],
+    productivity: ['focus stabilization', 'signal harmonics', 'aurora navigation'],
+};
+
 const FAMILIAR_MOTIFS = [
     'Lumicat',
     'Crystalwing',
@@ -262,7 +270,17 @@ function resolveAffinity(preferredAffinity: string | undefined, rng: () => numbe
         return pick(AFFINITIES, rng);
     }
 
-    const matchedAffinity = AFFINITIES.find((affinity) => affinity.toLowerCase() === normalized.toLowerCase());
+    const normalizedKey = normalized.toLowerCase();
+    if (normalizedKey === 'random') {
+        return pick(AFFINITIES, rng);
+    }
+
+    const affinityHints = AFFINITY_HINTS[normalizedKey];
+    if (affinityHints) {
+        return pick(affinityHints, rng);
+    }
+
+    const matchedAffinity = AFFINITIES.find((affinity) => affinity.toLowerCase() === normalizedKey);
     return matchedAffinity ?? normalized;
 }
 

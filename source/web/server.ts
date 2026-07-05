@@ -614,16 +614,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
         try {
             await ensureInitialized();
             const body = await parseBody(req);
-            const prompt = typeof body['prompt'] === 'string' ? body['prompt'].trim() : '';
+            const legacyPrompt = typeof body['prompt'] === 'string' ? body['prompt'].trim() : '';
+            const message = typeof body['message'] === 'string' ? body['message'].trim() : '';
+            const prompt = legacyPrompt || message;
             const image = typeof body['image'] === 'string' ? body['image'] : undefined;
             const mode = toCompanionMode(body['mode']);
+            const companionProfile = isGeneratedCompanionProfile(body['companionProfile']) ? body['companionProfile'] : undefined;
 
             if (!prompt && !image) {
                 respondJson(res, 400, { error: 'Prompt or image is required.' });
                 return true;
             }
 
-            const result = await app.interact(prompt, 'text', image, mode);
+            const result = await app.interact(prompt, 'text', image, mode, companionProfile);
             addLog(result.success ? 'info' : 'warn', `Chat interaction ${result.success ? 'completed' : 'failed'} in ${mode} mode.`);
             respondJson(res, 200, { ...result, mode });
             return true;

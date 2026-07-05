@@ -7,6 +7,7 @@ import { ObsVision } from '../module/ObsVision';
 import { TtsCoqui } from '../tts/TtsCoqui';
 import { getCompanionProfile, normalizeCompanionMode } from '../companion/CompanionProfile';
 import { CompanionPromptService } from '../companion/CompanionPromptService';
+import type { GeneratedCompanionProfile } from '../companion/GeneratedCompanionProfile';
 
 export type InteractionMode = 'text' | 'speech';
 
@@ -70,7 +71,7 @@ export class AetherialApp {
         return this.requireEars().listenAndTranscribe();
     }
 
-    async interact(userPrompt: string, mode: InteractionMode = 'text', uploadedImage?: string, companionModeInput?: unknown): Promise<AetherialReply> {
+    async interact(userPrompt: string, mode: InteractionMode = 'text', uploadedImage?: string, companionModeInput?: unknown, generatedProfile?: GeneratedCompanionProfile): Promise<AetherialReply> {
         if (!this.initialized) {
             throw new Error('AetherialApp not initialized');
         }
@@ -96,11 +97,14 @@ export class AetherialApp {
 
 
         const companionMode = normalizeCompanionMode(typeof companionModeInput === 'string' ? companionModeInput : undefined);
-        const routedPrompt = await this.companionPrompts.buildPrompt({
+        const promptInput = {
             mode: companionMode,
             userMessage: userPrompt,
             hasImage: Boolean(finalImage),
-        });
+        };
+        const routedPrompt = await this.companionPrompts.buildPrompt(
+            generatedProfile ? { ...promptInput, profile: generatedProfile } : promptInput,
+        );
 
         const response = await this.requireBrain().generate(routedPrompt, finalImage);
         if (!(response.success && response.value)) {

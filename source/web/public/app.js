@@ -28,13 +28,96 @@ const taskList = document.getElementById('task-list');
 const healthGrid = document.getElementById('health-grid');
 const logList = document.getElementById('log-list');
 const refreshSystem = document.getElementById('refresh-system');
-const regenerateProfileButton = document.getElementById('regenerate-profile');
+const profileForm = document.getElementById('companion-profile-form');
+const profileStatus = document.getElementById('profile-status');
+const profileUserName = document.getElementById('profile-user-name');
+const profileNativeLanguageInput = document.getElementById('profile-native-language-input');
+const profileTone = document.getElementById('profile-tone');
+const profileAffinityInput = document.getElementById('profile-affinity-input');
+const profileSeedInput = document.getElementById('profile-seed-input');
+const generateCompanionButton = document.getElementById('generate-companion');
+const saveCompanionButton = document.getElementById('save-companion');
 const revokeAccessButton = document.getElementById('revoke-access');
 const presenceName = document.getElementById('presence-name');
 const presenceMode = document.getElementById('presence-mode');
 const presenceVoice = document.getElementById('presence-voice');
 const presenceMemory = document.getElementById('presence-memory');
 const presencePrivacy = document.getElementById('presence-privacy');
+const modeAdaptationText = document.getElementById('mode-adaptation-text');
+
+const companionProfileStorageKey = 'gepetto-generated-companion-profile';
+const modeConfigs = {
+  study: {
+    label: 'Study Mode',
+    placeholder: 'Ask your companion to explain, quiz, summarize, or build active recall for a topic.',
+    starter: 'Study Mode: Help me study one topic using active recall, a concise summary, structured notes, and a tiny quiz.',
+  },
+  code: {
+    label: 'Code Mode',
+    placeholder: 'Ask for debugging, code explanation, refactoring, architecture, or implementation planning.',
+    starter: 'Code Mode: Help me explain, debug, refactor, or plan this implementation in clear steps.',
+  },
+  productivity: {
+    label: 'Productivity Mode',
+    placeholder: 'Ask for a daily plan, task breakdown, reminders, priorities, or a next action.',
+    starter: 'Productivity Mode: Help me turn today into a clear daily plan with priorities, reminders, and small next actions.',
+  },
+  japanese: {
+    label: 'Japanese Coach',
+    placeholder: 'Ask for vocabulary, grammar, sentence correction, kana, kanji, or practice drills.',
+    starter: 'Japanese Coach: Run a focused Japanese drill with vocabulary, grammar, sentence correction, kana or kanji recall, and encouraging feedback.',
+  },
+  creative: {
+    label: 'Creative Mode',
+    placeholder: 'Ask for brainstorming, drafting, worldbuilding, naming, or polished creative options.',
+    starter: 'Creative Mode: Help me brainstorm, write, and generate polished concepts with useful options and next steps.',
+  },
+  support: {
+    label: 'Emotional Support Mode',
+    placeholder: 'Ask for calm reflection, grounding, routines, focus recovery, or a gentle next step.',
+    starter: 'Emotional Support Mode: Help me reflect calmly, ground myself, check in, and choose one gentle next step.',
+  },
+};
+
+const fallbackCompanionProfile = {
+  id: 'generated-aerin-kaela-novareth',
+  name: 'Aerin Kaela Novareth',
+  shortName: 'Aerin',
+  origin: {
+    dimension: 'Dimension-7-Lyra',
+    cityDistrict: 'Aerilon, NovaNest district',
+    homelandDescription: 'Aerilon is a Dimension-7-Lyra city of crystalline light architecture and luminous civic gardens.',
+  },
+  classification: 'Homo aetheris hybrid - companion interface class',
+  affinity: 'luminous memory gardens',
+  familiarMotif: 'Lumicat',
+  personalitySeed: ['calm', 'loyal', 'curious', 'gently playful', 'study-oriented'],
+  temperament: 'calm, loyal, curious, gently playful, and study-oriented',
+  appearance: 'pearlescent hair, prism-lit eyes, and a jacket threaded with soft Aetherium lines',
+  voiceStyle: 'warm, clear, soft, focused',
+  memoryStyle: 'reflective and adaptive',
+  nativeLanguage: 'Aerilonian',
+  knownLanguages: ['Aerilonian', 'English', 'Japanese', 'Romanian'],
+  userNativeLanguage: 'Romanian',
+  greetingAerilonian: 'Luma ai-ren, sela thir va.',
+  greetingEnglish: 'Hello - I am Aerin, your generated Gepetto CompanionOS companion. One identity, many modes.',
+  dailyWorkflows: [
+    'turn goals into a three-step daily plan',
+    'convert study material into active recall prompts',
+    'summarize decisions and next actions after each session',
+    'protect focus with short check-ins and break reminders',
+  ],
+  safetyBoundary: 'Support study, work, creativity, reflection, and daily execution while prioritizing privacy, consent, grounding, breaks, and user autonomy.',
+  modeInstructions: {
+    study: 'Aerin keeps the same identity while teaching with active recall, worked examples, and weak-point review.',
+    code: 'Aerin keeps the same identity while debugging, explaining tradeoffs, and proposing safe, testable code changes.',
+    productivity: 'Aerin keeps the same identity while turning goals into prioritized plans, next actions, and gentle check-ins.',
+    japanese: 'Aerin keeps the same identity while coaching Japanese with corrections, examples, kana/kanji support, and low-pressure practice.',
+    creative: 'Aerin keeps the same identity while brainstorming, outlining, drafting, and refining ideas.',
+    support: 'Aerin keeps the same identity while offering calm reflection, grounding, boundaries, and non-clinical support.',
+  },
+  createdAt: '2026-07-05T00:00:00.000Z',
+};
 
 let currentImageBase64 = null;
 let mediaRecorder = null;
@@ -42,12 +125,8 @@ let isRecording = false;
 let isTranscribing = false;
 let audioChunks = [];
 let editingMemoryId = null;
-
-const profileSeeds = [
-  { name: 'Aerin', seed: 'Calm strategist with playful curiosity', voice: 'Warm, clear, focused', memory: 'Consent-based highlights and workflows', languages: 'English, Japanese, Aerilonian', workflows: 'Study sprints, build plans, reflection check-ins' },
-  { name: 'Nova', seed: 'Optimistic systems thinker with gentle accountability', voice: 'Bright, concise, encouraging', memory: 'Project milestones, preferences, and study weak points', languages: 'English, Japanese, Spanish', workflows: 'Daily planning, coding blocks, language drills' },
-  { name: 'Mira', seed: 'Patient coach with creative momentum', voice: 'Soft, precise, reassuring', memory: 'User-approved goals, routines, and context notes', languages: 'English, Japanese, French', workflows: 'Active recall, writing sessions, calm check-ins' },
-];
+let activeMode = companionMode?.value || 'productivity';
+let companionProfile = fallbackCompanionProfile;
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -95,7 +174,7 @@ function addMessage(role, text, imageUrl = null) {
 
   const nameLabel = document.createElement('div');
   nameLabel.className = 'sender-name';
-  nameLabel.textContent = role === 'eve' ? (presenceName?.textContent || 'Your companion') : 'You';
+  nameLabel.textContent = role === 'companion' ? (presenceName?.textContent || 'Your companion') : 'You';
 
   const bubble = document.createElement('article');
   bubble.className = `message ${role}`;
@@ -158,7 +237,7 @@ async function toggleRecording() {
   }
 
   if (!navigator.mediaDevices?.getUserMedia) {
-    addMessage('eve', 'Microphone input is not supported in this browser.');
+    addMessage('companion', 'Microphone input is not supported in this browser.');
     return;
   }
 
@@ -189,7 +268,7 @@ async function toggleRecording() {
         const transcript = await transcribeAudioBlob(audioBlob);
 
         if (!transcript) {
-          addMessage('eve', 'I listened carefully, but I could not hear any clear words.');
+          addMessage('companion', 'I listened carefully, but I could not hear any clear words.');
           return;
         }
 
@@ -197,7 +276,7 @@ async function toggleRecording() {
         promptInput.value = existingText ? `${existingText} ${transcript}` : transcript;
         promptInput.focus();
       } catch (error) {
-        addMessage('eve', `Microphone transcription failed: ${error.message}`);
+        addMessage('companion', `Microphone transcription failed: ${error.message}`);
       } finally {
         isTranscribing = false;
         setControlsDisabled(false);
@@ -207,18 +286,18 @@ async function toggleRecording() {
     mediaRecorder.start();
     setMicState(true);
   } catch (error) {
-    addMessage('eve', `Microphone access failed: ${error.message}`);
+    addMessage('companion', `Microphone access failed: ${error.message}`);
     setMicState(false);
   }
 }
 
 async function playAudioWithRetry(audioUrl, attempts = 3, delayMs = 150) {
   for (let index = 0; index < attempts; index += 1) {
-    const eveVoice = new Audio(audioUrl);
-    eveVoice.preload = 'auto';
+    const companionVoice = new Audio(audioUrl);
+    companionVoice.preload = 'auto';
 
     try {
-      await eveVoice.play();
+      await companionVoice.play();
       return true;
     } catch (playbackError) {
       console.warn(`Audio playback attempt ${index + 1}/${attempts} failed for ${audioUrl}`, playbackError);
@@ -386,7 +465,7 @@ if (micButton) {
 sttReadyToggle.addEventListener('change', () => setControlsDisabled(false));
 voiceTestButton.addEventListener('click', async () => {
   if (!(await playLatestVoice())) {
-    addMessage('eve', 'Voice playback test failed. Generate a response first, then verify audio output routing.');
+    addMessage('companion', 'Voice playback test failed. Generate a response first, then verify audio output routing.');
   }
 });
 
@@ -442,16 +521,16 @@ refreshSystem.addEventListener('click', loadSystemStatus);
 
 document.querySelectorAll('.mode-btn').forEach((button) => {
   button.addEventListener('click', () => {
-    promptInput.value = button.dataset.prompt;
-    if (button.dataset.mode) {
-      companionMode.value = button.dataset.mode;
-    }
-    if (button.dataset.label && presenceMode) {
-      presenceMode.textContent = button.dataset.label;
-    }
+    const nextMode = button.dataset.mode || 'productivity';
+    setActiveMode(nextMode);
+    promptInput.value = modeConfigs[nextMode]?.starter || button.dataset.prompt || '';
     promptInput.focus();
     document.getElementById('chat').scrollIntoView({ behavior: 'smooth' });
   });
+});
+
+companionMode.addEventListener('change', () => {
+  setActiveMode(companionMode.value);
 });
 
 form.addEventListener('submit', async (event) => {
@@ -462,12 +541,12 @@ form.addEventListener('submit', async (event) => {
     return;
   }
 
-  const prompt = promptInput.value.trim();
-  if (!prompt && !currentImageBase64) {
+  const message = promptInput.value.trim();
+  if (!message && !currentImageBase64) {
     return;
   }
 
-  addMessage('user', prompt, currentImageBase64);
+  addMessage('user', message, currentImageBase64);
 
   const imageToSend = currentImageBase64;
   promptInput.value = '';
@@ -480,47 +559,157 @@ form.addEventListener('submit', async (event) => {
     const payload = await fetchJson('/api/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, image: imageToSend, mode: companionMode.value }),
+      body: JSON.stringify({
+        message,
+        image: imageToSend,
+        mode: activeMode,
+        companionProfile,
+      }),
     });
 
     if (autoPlayToggle.checked && !(await playLatestVoice())) {
-      addMessage('eve', 'I answered, but audio playback failed. Check /eve_voice.wav and verify your output device.');
+      addMessage('companion', 'I answered, but audio playback failed. Check voice output routing.');
     }
 
-    addMessage('eve', payload.responseText ?? 'No response text received.');
+    addMessage('companion', payload.responseText ?? 'No response text received.');
     await loadSystemStatus();
   } catch (error) {
-    addMessage('eve', `Network error: ${error.message}`);
+    addMessage('companion', `Network error: ${error.message}`);
   } finally {
     setControlsDisabled(false);
     promptInput.focus();
   }
 });
 
+function textList(items, fallback = 'Not set') {
+  if (Array.isArray(items) && items.length > 0) {
+    return items.join(', ');
+  }
+  if (typeof items === 'string' && items.trim()) {
+    return items;
+  }
+  return fallback;
+}
+
+function workflowList(items) {
+  return Array.isArray(items) && items.length > 0 ? items.join('; ') : 'No workflows set yet.';
+}
+
+function storeCompanionProfile(profile) {
+  companionProfile = profile || fallbackCompanionProfile;
+  localStorage.setItem(companionProfileStorageKey, JSON.stringify(companionProfile));
+}
+
 function renderProfile(profile) {
-  document.getElementById('profile-name').textContent = profile.name;
-  document.getElementById('profile-seed').textContent = profile.seed;
-  document.getElementById('profile-voice').textContent = profile.voice;
-  document.getElementById('profile-memory').textContent = profile.memory;
-  document.getElementById('profile-languages').textContent = profile.languages;
-  document.getElementById('profile-workflows').textContent = profile.workflows;
-  if (presenceName) presenceName.textContent = profile.name;
-  if (presenceVoice) presenceVoice.textContent = profile.voice;
+  const safeProfile = profile || fallbackCompanionProfile;
+  document.getElementById('profile-name').textContent = safeProfile.name || fallbackCompanionProfile.name;
+  document.getElementById('profile-origin').textContent = safeProfile.origin?.cityDistrict || fallbackCompanionProfile.origin.cityDistrict;
+  document.getElementById('profile-affinity').textContent = safeProfile.affinity || fallbackCompanionProfile.affinity;
+  document.getElementById('profile-familiar').textContent = safeProfile.familiarMotif || fallbackCompanionProfile.familiarMotif;
+  document.getElementById('profile-seed').textContent = textList(safeProfile.personalitySeed);
+  document.getElementById('profile-native').textContent = safeProfile.nativeLanguage || fallbackCompanionProfile.nativeLanguage;
+  document.getElementById('profile-languages').textContent = textList(safeProfile.knownLanguages);
+  document.getElementById('profile-memory').textContent = safeProfile.memoryStyle || fallbackCompanionProfile.memoryStyle;
+  document.getElementById('profile-voice').textContent = safeProfile.voiceStyle || fallbackCompanionProfile.voiceStyle;
+  document.getElementById('profile-workflows').textContent = workflowList(safeProfile.dailyWorkflows);
+  if (presenceName) presenceName.textContent = safeProfile.shortName || safeProfile.name || 'Your companion';
+  if (presenceVoice) presenceVoice.textContent = safeProfile.voiceStyle || 'Ready with consent';
   if (presenceMemory) presenceMemory.textContent = 'User-owned memory';
+  if (profileNativeLanguageInput && !profileNativeLanguageInput.value) {
+    profileNativeLanguageInput.value = safeProfile.userNativeLanguage || 'Romanian';
+  }
+  setActiveMode(activeMode);
 }
 
-function loadProfile() {
-  const stored = localStorage.getItem('gepetto-demo-profile');
-  const profile = stored ? JSON.parse(stored) : profileSeeds[0];
-  localStorage.setItem('gepetto-demo-profile', JSON.stringify(profile));
+function setProfileStatus(message, tone = 'warn') {
+  if (!profileStatus) {
+    return;
+  }
+  profileStatus.textContent = message;
+  profileStatus.className = `module-tag ${tone}`;
+}
+
+async function loadCompanionProfile() {
+  const stored = localStorage.getItem(companionProfileStorageKey);
+  if (stored) {
+    try {
+      const cachedProfile = JSON.parse(stored);
+      companionProfile = cachedProfile;
+      renderProfile(cachedProfile);
+      setProfileStatus('Cached profile', 'warn');
+    } catch {
+      localStorage.removeItem(companionProfileStorageKey);
+    }
+  } else {
+    renderProfile(fallbackCompanionProfile);
+  }
+
+  const profile = await fetchJson('/api/companion/profile');
+  storeCompanionProfile(profile);
   renderProfile(profile);
+  setProfileStatus('Profile ready', 'good');
 }
 
-function regenerateProfile() {
-  const currentName = document.getElementById('profile-name').textContent;
-  const next = profileSeeds.find((profile) => profile.name !== currentName) || profileSeeds[0];
-  localStorage.setItem('gepetto-demo-profile', JSON.stringify(next));
-  renderProfile(next);
+function buildGeneratorInput() {
+  const input = {};
+  if (profileUserName.value.trim()) input.userName = profileUserName.value.trim();
+  if (profileNativeLanguageInput.value.trim()) input.userNativeLanguage = profileNativeLanguageInput.value.trim();
+  if (profileSeedInput.value.trim()) input.seed = profileSeedInput.value.trim();
+  if (profileTone.value) input.preferredTone = profileTone.value;
+  if (profileAffinityInput.value && profileAffinityInput.value !== 'random') {
+    input.preferredAffinity = profileAffinityInput.value;
+  }
+  return input;
+}
+
+async function generateCompanion() {
+  setProfileStatus('Generating', 'warn');
+  generateCompanionButton.disabled = true;
+  try {
+    const profile = await fetchJson('/api/companion/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildGeneratorInput()),
+    });
+    storeCompanionProfile(profile);
+    renderProfile(profile);
+    setProfileStatus('Generated and saved', 'good');
+  } catch (error) {
+    setProfileStatus(error.message, 'bad');
+  } finally {
+    generateCompanionButton.disabled = false;
+  }
+}
+
+async function saveCompanion() {
+  setProfileStatus('Saving', 'warn');
+  saveCompanionButton.disabled = true;
+  try {
+    const profile = await fetchJson('/api/companion/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(companionProfile || fallbackCompanionProfile),
+    });
+    storeCompanionProfile(profile);
+    renderProfile(profile);
+    setProfileStatus('Saved', 'good');
+  } catch (error) {
+    setProfileStatus(error.message, 'bad');
+  } finally {
+    saveCompanionButton.disabled = false;
+  }
+}
+
+function setActiveMode(mode) {
+  activeMode = modeConfigs[mode] ? mode : 'productivity';
+  const config = modeConfigs[activeMode];
+  if (companionMode) companionMode.value = activeMode;
+  if (presenceMode) presenceMode.textContent = config.label;
+  if (promptInput) promptInput.placeholder = config.placeholder;
+  if (modeAdaptationText) {
+    const companionName = companionProfile?.shortName || companionProfile?.name || 'Your companion';
+    modeAdaptationText.textContent = `${companionName} is adapting to ${config.label}. Same companion, focused behavior.`;
+  }
 }
 
 function loadPrivacyControls() {
@@ -542,7 +731,9 @@ function loadPrivacyControls() {
   });
 }
 
-regenerateProfileButton?.addEventListener('click', regenerateProfile);
+profileForm?.addEventListener('submit', (event) => event.preventDefault());
+generateCompanionButton?.addEventListener('click', generateCompanion);
+saveCompanionButton?.addEventListener('click', saveCompanion);
 revokeAccessButton?.addEventListener('click', () => {
   document.querySelectorAll('[data-privacy]').forEach((input) => {
     input.checked = false;
@@ -552,9 +743,13 @@ revokeAccessButton?.addEventListener('click', () => {
   if (presencePrivacy) presencePrivacy.textContent = 'Access revoked';
 });
 
-loadProfile();
+setActiveMode(activeMode);
+loadCompanionProfile().catch((error) => {
+  setProfileStatus(error.message, 'bad');
+  renderProfile(companionProfile || fallbackCompanionProfile);
+});
 loadPrivacyControls();
-addMessage('eve', 'Gepetto CompanionOS Signal Demo is online. Choose a mode, start a task, or save a user-owned memory.');
+addMessage('companion', 'Gepetto CompanionOS Signal Demo is online. Choose a mode, start a task, or save a user-owned memory.');
 loadSystemStatus().catch((error) => {
   runtimePill.textContent = error.message;
   runtimePill.className = 'status-pill bad';
