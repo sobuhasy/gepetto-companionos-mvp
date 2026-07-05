@@ -1,12 +1,26 @@
 # Gepetto CompanionOS MVP
 
-Gepetto CompanionOS is a privacy-first multimodal AI companion workspace for the July 12 Signal Demo. The MVP focuses on a browser dashboard with chat, voice controls, memory, tasks, study modes, and consent-based screen context.
+Gepetto CompanionOS is a privacy-first multimodal AI companion workspace for the July 12 Signal Demo. The MVP focuses on a browser dashboard with chat, voice controls, user-owned memory, tasks, focused modes, and consent-based screen context.
+
+## Generated Companion Identity
+
+The current runtime uses a local generated companion identity engine. Each user gets one persistent companion profile, and the public modes change behavior rather than replacing the companion's identity.
+
+The profile includes a generated name, origin district, affinity, familiar motif, personality seed, language support, memory style, voice style, daily workflows, and safety boundary. Aerilonian and Dimension-7-Lyra are lore flavor for the product experience; the companion should not claim literal real-world sentience.
+
+Public modes are Study, Code, Productivity, Japanese Coach, Creative, and Emotional Support. The same companion adapts to those modes while staying privacy-first, supportive, and oriented around study, work, creativity, and daily execution.
 
 ## Signal Demo Scope
 
-The current product framing is: from chatbot to companion OS. First the signal, then the face, then the vessel.
+The current product framing is: Signal -> Face -> Vessel.
 
-The v0.1 demo intentionally avoids the robot body, marketplace, payments, social network, and large agent-framework work. Hardware backends remain available for experiments, but the default MVP runtime uses the VTube backend so the web app does not require a Pico serial device.
+- Signal is the current MVP: PC/mobile CompanionOS, chat, voice, memory, tasks, privacy, and consent-based context.
+- Face is later: avatar, voice, customization, and creator ecosystem.
+- Vessel is later: future robotics embodiment, safe/social design, and expressive hardware.
+
+Wardrobe & skills marketplace — later. Not included in Signal Demo. The v0.1 demo intentionally avoids payments, real marketplace logic, the robot body, social networking, and large agent-framework work.
+
+Hardware backends remain available for experiments, but the default MVP runtime uses the VTube backend so the web app does not require a Pico serial device.
 
 ## Setup
 
