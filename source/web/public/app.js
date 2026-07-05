@@ -28,6 +28,13 @@ const taskList = document.getElementById('task-list');
 const healthGrid = document.getElementById('health-grid');
 const logList = document.getElementById('log-list');
 const refreshSystem = document.getElementById('refresh-system');
+const regenerateProfileButton = document.getElementById('regenerate-profile');
+const revokeAccessButton = document.getElementById('revoke-access');
+const presenceName = document.getElementById('presence-name');
+const presenceMode = document.getElementById('presence-mode');
+const presenceVoice = document.getElementById('presence-voice');
+const presenceMemory = document.getElementById('presence-memory');
+const presencePrivacy = document.getElementById('presence-privacy');
 
 let currentImageBase64 = null;
 let mediaRecorder = null;
@@ -35,6 +42,12 @@ let isRecording = false;
 let isTranscribing = false;
 let audioChunks = [];
 let editingMemoryId = null;
+
+const profileSeeds = [
+  { name: 'Aerin', seed: 'Calm strategist with playful curiosity', voice: 'Warm, clear, focused', memory: 'Consent-based highlights and workflows', languages: 'English, Japanese, Aerilonian', workflows: 'Study sprints, build plans, reflection check-ins' },
+  { name: 'Nova', seed: 'Optimistic systems thinker with gentle accountability', voice: 'Bright, concise, encouraging', memory: 'Project milestones, preferences, and study weak points', languages: 'English, Japanese, Spanish', workflows: 'Daily planning, coding blocks, language drills' },
+  { name: 'Mira', seed: 'Patient coach with creative momentum', voice: 'Soft, precise, reassuring', memory: 'User-approved goals, routines, and context notes', languages: 'English, Japanese, French', workflows: 'Active recall, writing sessions, calm check-ins' },
+];
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -82,7 +95,7 @@ function addMessage(role, text, imageUrl = null) {
 
   const nameLabel = document.createElement('div');
   nameLabel.className = 'sender-name';
-  nameLabel.textContent = role === 'eve' ? 'エーヴェ様' : 'そぶくん';
+  nameLabel.textContent = role === 'eve' ? (presenceName?.textContent || 'Your companion') : 'You';
 
   const bubble = document.createElement('article');
   bubble.className = `message ${role}`;
@@ -282,7 +295,9 @@ function renderVision(payload) {
 async function loadMemory() {
   const payload = await fetchJson('/api/memory');
   if (memoryCategory.children.length === 0) {
-    payload.categories.forEach((category) => {
+    const preferredCategories = ['preference', 'project', 'study', 'workflow', 'personal'];
+    const categories = [...new Set([...preferredCategories, ...(payload.categories ?? [])])];
+    categories.forEach((category) => {
       const option = document.createElement('option');
       option.value = category;
       option.textContent = category.replaceAll('_', ' ');
@@ -292,7 +307,7 @@ async function loadMemory() {
 
   memoryList.replaceChildren();
   if (payload.memories.length === 0) {
-    memoryList.textContent = 'No long-term memories stored yet.';
+    memoryList.textContent = 'No user-owned memories stored yet.';
     return;
   }
 
@@ -431,6 +446,9 @@ document.querySelectorAll('.mode-btn').forEach((button) => {
     if (button.dataset.mode) {
       companionMode.value = button.dataset.mode;
     }
+    if (button.dataset.label && presenceMode) {
+      presenceMode.textContent = button.dataset.label;
+    }
     promptInput.focus();
     document.getElementById('chat').scrollIntoView({ behavior: 'smooth' });
   });
@@ -479,7 +497,64 @@ form.addEventListener('submit', async (event) => {
   }
 });
 
-addMessage('eve', 'Gepetto CompanionOS Signal Demo is online. Choose a mode, start a task, or save a memory.');
+function renderProfile(profile) {
+  document.getElementById('profile-name').textContent = profile.name;
+  document.getElementById('profile-seed').textContent = profile.seed;
+  document.getElementById('profile-voice').textContent = profile.voice;
+  document.getElementById('profile-memory').textContent = profile.memory;
+  document.getElementById('profile-languages').textContent = profile.languages;
+  document.getElementById('profile-workflows').textContent = profile.workflows;
+  if (presenceName) presenceName.textContent = profile.name;
+  if (presenceVoice) presenceVoice.textContent = profile.voice;
+  if (presenceMemory) presenceMemory.textContent = 'User-owned memory';
+}
+
+function loadProfile() {
+  const stored = localStorage.getItem('gepetto-demo-profile');
+  const profile = stored ? JSON.parse(stored) : profileSeeds[0];
+  localStorage.setItem('gepetto-demo-profile', JSON.stringify(profile));
+  renderProfile(profile);
+}
+
+function regenerateProfile() {
+  const currentName = document.getElementById('profile-name').textContent;
+  const next = profileSeeds.find((profile) => profile.name !== currentName) || profileSeeds[0];
+  localStorage.setItem('gepetto-demo-profile', JSON.stringify(next));
+  renderProfile(next);
+}
+
+function loadPrivacyControls() {
+  document.querySelectorAll('[data-privacy]').forEach((input) => {
+    const key = `gepetto-privacy-${input.dataset.privacy}`;
+    const stored = localStorage.getItem(key);
+    if (stored !== null) {
+      input.checked = stored === 'true';
+    }
+    input.addEventListener('change', () => {
+      localStorage.setItem(key, String(input.checked));
+      if (input.dataset.privacy === 'memory' && presenceMemory) {
+        presenceMemory.textContent = input.checked ? 'User-owned memory' : 'Memory paused';
+      }
+      if (input.dataset.privacy === 'localFirst' && presencePrivacy) {
+        presencePrivacy.textContent = input.checked ? 'Local-first controls' : 'Cloud features require consent';
+      }
+    });
+  });
+}
+
+regenerateProfileButton?.addEventListener('click', regenerateProfile);
+revokeAccessButton?.addEventListener('click', () => {
+  document.querySelectorAll('[data-privacy]').forEach((input) => {
+    input.checked = false;
+    localStorage.setItem(`gepetto-privacy-${input.dataset.privacy}`, 'false');
+  });
+  if (presenceMemory) presenceMemory.textContent = 'Memory paused';
+  if (presencePrivacy) presencePrivacy.textContent = 'Access revoked';
+});
+
+loadProfile();
+loadPrivacyControls();
+addMessage('eve', 'Gepetto CompanionOS Signal Demo is online. Choose a mode, start a task, or save a user-owned memory.');
 loadSystemStatus().catch((error) => {
   runtimePill.textContent = error.message;
   runtimePill.className = 'status-pill bad';

@@ -35,7 +35,7 @@ type DashboardLogEntry = {
 type DashboardTask = {
     id: string;
     title: string;
-    kind: 'startup' | 'study';
+    kind: 'startup' | 'study' | 'workflow' | 'project';
     details: string;
     done: boolean;
     createdAt: string;
@@ -56,26 +56,42 @@ const memorySources: MemorySource[] = ['chat', 'manual', 'system', 'imported'];
 
 const defaultTasks: DashboardTask[] = [
     {
-        id: 'startup-retina-check',
-        title: 'Retina + voice startup check',
-        kind: 'startup',
-        details: 'Confirm OBS, VTube Studio, microphone, and TTS are ready before a demo.',
+        id: 'study-active-recall',
+        title: 'Active recall study sprint',
+        kind: 'study',
+        details: 'Use Study Mode to turn one topic into questions, answers, and weak-point review.',
         done: false,
         createdAt: new Date(0).toISOString(),
     },
     {
-        id: 'study-genki-review',
-        title: 'Genki review sprint',
+        id: 'japanese-coach-sprint',
+        title: 'Japanese coach sprint',
         kind: 'study',
-        details: 'Open Japanese mode and ask エーヴェ様 for today’s grammar drill.',
+        details: 'Practice vocabulary, grammar, sentence correction, and kana or kanji recall.',
         done: false,
         createdAt: new Date(0).toISOString(),
     },
     {
-        id: 'study-mandarin-shadowing',
-        title: 'Lyriël Mandarin shadowing',
-        kind: 'study',
-        details: 'Use Mandarin mode to practice tones, pinyin, and one short dialogue.',
+        id: 'build-one-mvp-improvement',
+        title: 'Build one MVP improvement',
+        kind: 'project',
+        details: 'Choose one visible improvement, ship it, and verify the demo still builds.',
+        done: false,
+        createdAt: new Date(0).toISOString(),
+    },
+    {
+        id: 'review-privacy-controls',
+        title: 'Review privacy controls',
+        kind: 'workflow',
+        details: 'Confirm microphone, camera, screen context, memory, and local-first toggles match user consent.',
+        done: false,
+        createdAt: new Date(0).toISOString(),
+    },
+    {
+        id: 'prepare-follow-up-message',
+        title: 'Prepare follow-up message',
+        kind: 'workflow',
+        details: 'Draft the next update, investor note, or user-facing follow-up after the demo session.',
         done: false,
         createdAt: new Date(0).toISOString(),
     },
