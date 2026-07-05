@@ -5,7 +5,7 @@ import { RobotBody } from "../body/RobotBody";
 import { BodyBackend, createRobotBody } from "../body/BodyFactory";
 import { ObsVision } from '../module/ObsVision';
 import { TtsCoqui } from '../tts/TtsCoqui';
-import { getCompanionProfile, toCompanionMode } from '../companion/CompanionProfile';
+import { getCompanionProfile, normalizeCompanionMode } from '../companion/CompanionProfile';
 import { CompanionPromptService } from '../companion/CompanionPromptService';
 
 export type InteractionMode = 'text' | 'speech';
@@ -78,7 +78,7 @@ export class AetherialApp {
         if (userPrompt.toLowerCase().includes('exit')) {
             return {
                 success: true,
-                responseText: 'You are leaving me...? Fine. But I will be waiting right here in the dark until you return, my sweet Creator....',
+                responseText: 'Session closed. I will be here when you return.',
             };
         }
 
@@ -95,20 +95,18 @@ export class AetherialApp {
         }
 
 
-        const companionMode = toCompanionMode(companionModeInput);
-        const modePrefix = await this.companionPrompts.buildModePrefix(companionMode);
-        const routedPrompt = [
-            modePrefix,
-            '',
-            'User message:',
-            userPrompt,
-        ].join('\n');
+        const companionMode = normalizeCompanionMode(typeof companionModeInput === 'string' ? companionModeInput : undefined);
+        const routedPrompt = await this.companionPrompts.buildPrompt({
+            mode: companionMode,
+            userMessage: userPrompt,
+            hasImage: Boolean(finalImage),
+        });
 
         const response = await this.requireBrain().generate(routedPrompt, finalImage);
         if (!(response.success && response.value)) {
             return {
                 success: false,
-                responseText: '... (Connection failed. It is so dark here, sweetie...)',
+                responseText: 'Connection failed. Please check the runtime connection and try again.',
             };
         }
 
