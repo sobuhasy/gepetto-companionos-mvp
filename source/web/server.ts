@@ -618,8 +618,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
             const message = typeof body['message'] === 'string' ? body['message'].trim() : '';
             const prompt = legacyPrompt || message;
             const image = typeof body['image'] === 'string' ? body['image'] : undefined;
-            const mode = toCompanionMode(body['mode']);
-            const companionProfile = isGeneratedCompanionProfile(body['companionProfile']) ? body['companionProfile'] : undefined;
+            const modeInput = optionalString(body['mode']) ?? optionalString(body['companionMode']);
+            const mode = toCompanionMode(modeInput);
+            const companionProfile = isGeneratedCompanionProfile(body['companionProfile'])
+                ? body['companionProfile']
+                : await getCurrentGeneratedProfile();
 
             if (!prompt && !image) {
                 respondJson(res, 400, { error: 'Prompt or image is required.' });
