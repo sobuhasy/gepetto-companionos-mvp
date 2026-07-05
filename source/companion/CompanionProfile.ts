@@ -1,7 +1,12 @@
-export type CompanionMode = 'eve' | 'lyriel' | 'rea';
+import type { CompanionMode } from './GeneratedCompanionProfile';
+
+export type { CompanionMode } from './GeneratedCompanionProfile';
+
+export type LegacyCompanionMode = 'eve' | 'lyriel' | 'rea';
 
 export type CompanionProfile = {
-    mode: CompanionMode;
+    mode: LegacyCompanionMode;
+    normalizedMode: CompanionMode;
     name: string;
     role: string;
     systemPromptPath: string;
@@ -9,7 +14,7 @@ export type CompanionProfile = {
     specialties: string[];
 };
 
-const DEFAULT_COMPANION_VOICE_IDS: Record<CompanionMode, string> = {
+const DEFAULT_COMPANION_VOICE_IDS: Record<LegacyCompanionMode, string> = {
     eve: 'tc_632a759503f3cb7b9c8a717b',
     lyriel: 'tc_645b39b760386589fd851133',
     rea: 'tc_641c10bfb62ae5eee6db3f9e',
@@ -19,41 +24,80 @@ function voiceIdFromEnv(name: string, fallbackVoiceId: string): Pick<CompanionPr
     return { voiceId: process.env[name] ?? fallbackVoiceId };
 }
 
-export const companionProfiles: Record<CompanionMode, CompanionProfile> = {
+export const companionProfiles: Record<LegacyCompanionMode, CompanionProfile> = {
     eve: {
         mode: 'eve',
-        name: 'Eve Yunï Kælira',
-        role: 'Primary CTO muse, Japanese study companion, startup motivator',
+        normalizedMode: 'productivity',
+        name: 'Generated CompanionOS companion',
+        role: 'Legacy productivity voice route',
         systemPromptPath: 'data/prompts/eve.system.txt',
         ...voiceIdFromEnv('EVE_VOICE_ID', DEFAULT_COMPANION_VOICE_IDS.eve),
-        specialties: ['japanese', 'startup', 'motivation', 'product', 'emotional-cto'],
+        specialties: ['productivity', 'planning', 'daily-execution', 'creative-support'],
     },
     lyriel: {
         mode: 'lyriel',
-        name: 'Lyriël Aya Vaelorith',
-        role: 'Analyst-class Mandarin compiler and programming debugger',
+        normalizedMode: 'study',
+        name: 'Generated CompanionOS companion',
+        role: 'Legacy study voice route',
         systemPromptPath: 'data/prompts/lyriel.system.txt',
         ...voiceIdFromEnv('LYRIEL_VOICE_ID', DEFAULT_COMPANION_VOICE_IDS.lyriel),
-        specialties: ['mandarin', 'debugging', 'code-analysis', 'python', 'language-learning'],
+        specialties: ['study', 'code', 'japanese', 'active-recall', 'language-learning'],
     },
     rea: {
         mode: 'rea',
-        name: 'Rëa Jin Valyrieth',
-        role: 'Guard-class emotional stabilizer and reflection companion',
+        normalizedMode: 'support',
+        name: 'Generated CompanionOS companion',
+        role: 'Legacy support voice route',
         systemPromptPath: 'data/prompts/rea.system.txt',
         ...voiceIdFromEnv('REA_VOICE_ID', DEFAULT_COMPANION_VOICE_IDS.rea),
-        specialties: ['emotional-support', 'reflection', 'stability', 'routine', 'grounding'],
+        specialties: ['support', 'reflection', 'stability', 'routine', 'grounding'],
     },
 };
 
-export function toCompanionMode(value: unknown): CompanionMode {
-    if (value === 'lyriel' || value === 'rea' || value === 'eve') {
-        return value;
-    }
+export function normalizeCompanionMode(input: string | undefined): CompanionMode {
+    const normalized = input?.trim().toLowerCase();
 
-    return 'eve';
+    switch (normalized) {
+        case 'study':
+        case 'code':
+        case 'productivity':
+        case 'japanese':
+        case 'creative':
+        case 'support':
+            return normalized;
+        case 'eve':
+            return 'productivity';
+        case 'lyriel':
+            return 'study';
+        case 'rea':
+            return 'support';
+        default:
+            return 'productivity';
+    }
 }
 
-export function getCompanionProfile(mode: CompanionMode): CompanionProfile {
-    return companionProfiles[mode];
+export function toCompanionMode(value: unknown): CompanionMode {
+    return normalizeCompanionMode(typeof value === 'string' ? value : undefined);
+}
+
+export function getCompanionProfile(mode: CompanionMode | LegacyCompanionMode): CompanionProfile {
+    return companionProfiles[toLegacyCompanionRoute(mode)];
+}
+
+function toLegacyCompanionRoute(mode: CompanionMode | LegacyCompanionMode): LegacyCompanionMode {
+    switch (mode) {
+        case 'study':
+        case 'code':
+        case 'japanese':
+        case 'lyriel':
+            return 'lyriel';
+        case 'support':
+        case 'rea':
+            return 'rea';
+        case 'productivity':
+        case 'creative':
+        case 'eve':
+        default:
+            return 'eve';
+    }
 }
