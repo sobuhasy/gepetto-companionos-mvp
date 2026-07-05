@@ -1,4 +1,4 @@
-export type GeneratedCompanionMode =
+export type CompanionMode =
     | 'study'
     | 'code'
     | 'productivity'
@@ -30,11 +30,11 @@ export type GeneratedCompanionProfile = {
     greetingEnglish: string;
     dailyWorkflows: string[];
     safetyBoundary: string;
-    modeInstructions: Record<GeneratedCompanionMode, string>;
+    modeInstructions: Record<CompanionMode, string>;
     createdAt: string;
 };
 
-export const GENERATED_COMPANION_MODES: readonly GeneratedCompanionMode[] = [
+export const COMPANION_MODES: readonly CompanionMode[] = [
     'study',
     'code',
     'productivity',
