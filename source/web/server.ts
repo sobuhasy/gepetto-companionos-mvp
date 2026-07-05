@@ -8,6 +8,10 @@ import { AetherialApp } from '../index/AetherialApp';
 import { SystemHealthService } from '../module/SystemHealthService';
 import { MemoryCategory, MemoryRecord, MemorySource } from '../ltm/ltm_interface';
 import { toCompanionMode } from '../companion/CompanionProfile';
+import { DEFAULT_GENERATED_COMPANION_PROFILE, generateCompanionProfile } from '../companion/CompanionIdentityGenerator';
+import { COMPANION_MODES } from '../companion/GeneratedCompanionProfile';
+import type { CompanionIdentityGeneratorInput } from '../companion/CompanionIdentityGenerator';
+import type { GeneratedCompanionProfile } from '../companion/GeneratedCompanionProfile';
 
 const DEFAULT_PORT = 3000;
 const PORT = Number(process.env['PORT'] ?? DEFAULT_PORT);
@@ -16,9 +20,11 @@ const PUBLIC_DIR = join(process.cwd(), 'source', 'web', 'public');
 const TMP_DIR = join(process.cwd(), 'tmp');
 const MEMORY_PATH = join(process.cwd(), 'data', 'ltm', 'memories.jsonl');
 const TASKS_PATH = join(process.cwd(), 'data', 'dashboard', 'tasks.json');
+const COMPANION_PROFILE_PATH = join(process.cwd(), 'data', 'companion', 'generated-profile.json');
 const healthService = new SystemHealthService();
 const app = new AetherialApp();
 let isReady = false;
+let currentGeneratedProfile: GeneratedCompanionProfile | undefined;
 let latestVision: { image?: string; capturedAt?: string; source: string; status: string } = {
     source: 'OBS Display Capture',
     status: 'No screen context has been captured in this web session yet.',
@@ -139,6 +145,127 @@ async function parseBody(req: IncomingMessage): Promise<Record<string, unknown>>
 function respondJson(res: ServerResponse, statusCode: number, payload: unknown): void {
     res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(payload));
+}
+
+function optionalString(value: unknown): string | undefined {
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasStringField(record: Record<string, unknown>, key: string): boolean {
+    return typeof record[key] === 'string' && record[key].trim().length > 0;
+}
+
+function isStringArray(value: unknown): value is string[] {
+    return Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === 'string' && item.trim().length > 0);
+}
+
+function isModeInstructionRecord(value: unknown): boolean {
+    return isRecord(value) && COMPANION_MODES.every((mode) => hasStringField(value, mode));
+}
+
+function isGeneratedCompanionProfile(value: unknown): value is GeneratedCompanionProfile {
+    if (!isRecord(value)) {
+        return false;
+    }
+
+    const origin = value['origin'];
+    if (!isRecord(origin)) {
+        return false;
+    }
+
+    return [
+        'id',
+        'name',
+        'shortName',
+        'classification',
+        'affinity',
+        'familiarMotif',
+        'temperament',
+        'appearance',
+        'voiceStyle',
+        'memoryStyle',
+        'userNativeLanguage',
+        'greetingAerilonian',
+        'greetingEnglish',
+        'safetyBoundary',
+        'createdAt',
+    ].every((field) => hasStringField(value, field))
+        && origin['dimension'] === 'Dimension-7-Lyra'
+        && hasStringField(origin, 'cityDistrict')
+        && hasStringField(origin, 'homelandDescription')
+        && value['nativeLanguage'] === 'Aerilonian'
+        && isStringArray(value['knownLanguages'])
+        && isStringArray(value['personalitySeed'])
+        && isStringArray(value['dailyWorkflows'])
+        && isModeInstructionRecord(value['modeInstructions']);
+}
+
+function companionGeneratorInputFromBody(body: Record<string, unknown>): CompanionIdentityGeneratorInput {
+    const input: CompanionIdentityGeneratorInput = {};
+    const userName = optionalString(body['userName']);
+    const userNativeLanguage = optionalString(body['userNativeLanguage']);
+    const seed = optionalString(body['seed']);
+    const preferredTone = optionalString(body['preferredTone']);
+    const preferredAffinity = optionalString(body['preferredAffinity']);
+
+    if (userName !== undefined) {
+        input.userName = userName;
+    }
+    if (userNativeLanguage !== undefined) {
+        input.userNativeLanguage = userNativeLanguage;
+    }
+    if (seed !== undefined) {
+        input.seed = seed;
+    }
+    if (preferredTone !== undefined) {
+        input.preferredTone = preferredTone;
+    }
+    if (preferredAffinity !== undefined) {
+        input.preferredAffinity = preferredAffinity;
+    }
+
+    return input;
+}
+
+async function loadSavedGeneratedProfile(): Promise<GeneratedCompanionProfile | undefined> {
+    try {
+        const profile = JSON.parse(await readFile(COMPANION_PROFILE_PATH, 'utf-8')) as unknown;
+        if (isGeneratedCompanionProfile(profile)) {
+            return profile;
+        }
+
+        addLog('warn', 'Saved generated companion profile is invalid; using default profile.');
+        return undefined;
+    } catch (error) {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+            return undefined;
+        }
+        throw error;
+    }
+}
+
+async function getCurrentGeneratedProfile(): Promise<GeneratedCompanionProfile> {
+    if (currentGeneratedProfile) {
+        return currentGeneratedProfile;
+    }
+
+    const savedProfile = await loadSavedGeneratedProfile();
+    if (savedProfile) {
+        currentGeneratedProfile = savedProfile;
+        return savedProfile;
+    }
+
+    return DEFAULT_GENERATED_COMPANION_PROFILE;
+}
+
+async function saveGeneratedProfile(profile: GeneratedCompanionProfile): Promise<void> {
+    currentGeneratedProfile = profile;
+    await mkdir(dirname(COMPANION_PROFILE_PATH), { recursive: true });
+    await writeFile(COMPANION_PROFILE_PATH, `${JSON.stringify(profile, null, 2)}\n`, 'utf-8');
 }
 
 function extensionFromMimeType(mimeType: string): string {
@@ -385,7 +512,60 @@ async function handleVision(req: IncomingMessage, res: ServerResponse): Promise<
     return false;
 }
 
+async function handleCompanionProfile(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+    const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+    if (!pathname.startsWith('/api/companion/')) {
+        return false;
+    }
+
+    try {
+        if (pathname === '/api/companion/profile' && req.method === 'GET') {
+            respondJson(res, 200, await getCurrentGeneratedProfile());
+            return true;
+        }
+
+        if (pathname === '/api/companion/generate' && req.method === 'POST') {
+            const body = await parseBody(req);
+            const profile = generateCompanionProfile(companionGeneratorInputFromBody(body));
+            await saveGeneratedProfile(profile);
+            addLog('info', `Generated companion profile saved: ${profile.name}.`);
+            respondJson(res, 200, profile);
+            return true;
+        }
+
+        if (pathname === '/api/companion/profile' && req.method === 'POST') {
+            const body = await parseBody(req);
+            if (!isGeneratedCompanionProfile(body)) {
+                respondJson(res, 400, { error: 'A valid GeneratedCompanionProfile is required.' });
+                return true;
+            }
+
+            await saveGeneratedProfile(body);
+            addLog('info', `Generated companion profile updated: ${body.name}.`);
+            respondJson(res, 200, body);
+            return true;
+        }
+    } catch (error) {
+        console.error('Failed to handle companion profile request:', error);
+        addLog('error', 'Generated companion profile request failed.');
+        respondJson(res, 500, { error: 'Failed to handle generated companion profile request.' });
+        return true;
+    }
+
+    if (pathname === '/api/companion/profile' || pathname === '/api/companion/generate') {
+        respondJson(res, 405, { error: 'Method not allowed.' });
+        return true;
+    }
+
+    respondJson(res, 404, { error: 'Companion API endpoint not found.' });
+    return true;
+}
+
 async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+    if (await handleCompanionProfile(req, res)) {
+        return true;
+    }
+
     if (await handleMemory(req, res)) {
         return true;
     }
