@@ -15,9 +15,9 @@ export type CompanionProfile = {
 };
 
 const DEFAULT_COMPANION_VOICE_IDS: Record<LegacyCompanionMode, string> = {
-    eve: 'tc_632a759503f3cb7b9c8a717b',
-    lyriel: 'tc_645b39b760386589fd851133',
-    rea: 'tc_641c10bfb62ae5eee6db3f9e',
+    eve: 'tc_68d49c1e02c83f1fd4cdeaae',
+    lyriel: 'tc_68d49c1e02c83f1fd4cdeaae',
+    rea: 'tc_68d49c1e02c83f1fd4cdeaae',
 };
 
 function voiceIdFromEnv(name: string, fallbackVoiceId: string): Pick<CompanionProfile, 'voiceId'> {

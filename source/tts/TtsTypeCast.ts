@@ -5,7 +5,7 @@ import * as path from 'path';
 
 export class TtsTypeCast implements TTS {
     private client: TypecastClient | undefined;
-    private readonly defaultVoiceId = "tc_632a759503f3cb7b9c8a717b";     // Eve-sama's voice is called Lindsay in TypeCast
+    private readonly defaultVoiceId = "tc_68d49c1e02c83f1fd4cdeaae";
 
     public async init(): Promise<void> {
         const apiKey = process.env['TYPECAST_API_KEY'];
