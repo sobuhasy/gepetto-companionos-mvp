@@ -230,10 +230,15 @@ export class AetherialApp {
             return "";
         }
 
-        const sentences = cleaned.match(/[^.!?。！？]+[.!?。！？]+/g);
-        const preview = sentences?.slice(0, 2).join(" ") ?? cleaned;
+        const maxSpeechCharacters = Number(process.env["COMPANION_MAX_SPEECH_CHARS"] ?? 2500);
 
-        return preview.length > 700 ? `${preview.slice(0, 697)}...` : preview;
+        if (!Number.isFinite(maxSpeechCharacters) || maxSpeechCharacters <= 0) {
+            return cleaned;
+        }
+
+        return cleaned.length > maxSpeechCharacters
+            ? `${cleaned.slice(0, maxSpeechCharacters - 3)}...`
+            : cleaned;
     }
 
     private requireBrain(): LlmOpenAI {
