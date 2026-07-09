@@ -125,7 +125,7 @@ async function ensureInitialized(): Promise<void> {
     }
     await app.init();
     isReady = true;
-    addLog('info', 'Aetherial runtime initialized for Aetherlink.');
+    addLog('info', 'CompanionOS runtime initialized for the Signal demo.');
 }
 
 async function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -345,6 +345,18 @@ function toMemorySource(value: unknown): MemorySource {
     return memorySources.includes(value as MemorySource) ? value as MemorySource : 'manual';
 }
 
+function toDashboardTaskKind(value: unknown): DashboardTask['kind'] {
+    switch (value) {
+        case 'study':
+        case 'workflow':
+        case 'project':
+        case 'startup':
+            return value;
+        default:
+            return 'workflow';
+    }
+}
+
 async function handleMemory(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     if (req.url?.startsWith('/api/memory') !== true) {
         return false;
@@ -453,7 +465,7 @@ async function handleTasks(req: IncomingMessage, res: ServerResponse): Promise<b
         const task: DashboardTask = {
             id: randomUUID(),
             title,
-            kind: body['kind'] === 'study' ? 'study' : 'startup',
+            kind: toDashboardTaskKind(body['kind']),
             details: typeof body['details'] === 'string' ? body['details'].trim() : '',
             done: false,
             createdAt: new Date().toISOString(),

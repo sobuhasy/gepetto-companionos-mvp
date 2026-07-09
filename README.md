@@ -2,6 +2,32 @@
 
 Gepetto CompanionOS is a privacy-first multimodal AI companion workspace for the July 12 Signal Demo. The MVP focuses on a browser dashboard with chat, voice controls, user-owned memory, tasks, focused modes, and consent-based screen context.
 
+## Collaborator Demo Script
+
+Gepetto CompanionOS is a privacy-first AI companion workspace that gives users one persistent companion identity across study, work, creativity, and daily execution.
+
+Demo flow:
+
+1. Start on the dashboard hero and explain that Signal is the current MVP: chat, voice, memory, tasks, modes, and consent-based context.
+2. Show the companion identity panel and emphasize that modes change behavior without replacing the companion.
+3. Switch through Study, Code, Productivity, Japanese, Creative, and Support modes to show one companion adapting to different workflows.
+4. Send a short chat prompt, then point out voice controls, microphone consent, and screen-context capture as opt-in surfaces.
+5. Open memory, tasks, privacy, and the Signal -> Face -> Vessel roadmap to clarify what is live now and what is later.
+
+Feedback wanted from Kaveesha:
+
+- Is the CompanionOS positioning clear in the first 60 seconds?
+- Which demo moment best communicates persistent identity across modes?
+- Which part feels confusing, risky, or too broad for an MVP?
+- What would make this more credible for an early collaborator or YC-style conversation?
+
+YC-safe positioning:
+
+- Frame this as a privacy-first companion workspace, not an AI girlfriend app.
+- Present Signal as the current product; Face and Vessel are roadmap stages, not current promises.
+- Emphasize user-owned memory, consent, practical workflows, and daily execution.
+- Avoid private lore, fixed persona backstory, and claims of sentience or guaranteed outcomes.
+
 ## Generated Companion Identity
 
 The current runtime uses a local generated companion identity engine. Each user gets one persistent companion profile, and the public modes change behavior rather than replacing the companion's identity.

@@ -34,8 +34,8 @@
       <header id="home" class="hero-panel">
         <div class="hero-copy">
           <p class="eyebrow">From chatbot to CompanionOS</p>
-          <h2>One persistent companion identity for study, work, creativity, and daily execution.</h2>
-          <p>Gepetto CompanionOS brings chat, voice, user-owned memory, daily plans, consent-based context, and focused modes into one privacy-first AI companion workspace.</p>
+          <h2>Gepetto CompanionOS: one AI companion, many working modes.</h2>
+          <p>A persistent companion identity moves across study, code, productivity, Japanese, creative, and support modes with chat, voice, user-owned memory, daily plans, and consent-based context.</p>
           <div class="hero-actions">
             <a class="secondary-btn" href="#chat">Open workspace</a>
             <a class="secondary-btn ghost" href="#privacy">Review privacy</a>
@@ -65,30 +65,30 @@
         <div class="module-heading">
           <div>
             <p class="eyebrow">Companion Identity</p>
-            <h3>Every companion is born, not selected.</h3>
-            <p class="identity-copy">One identity. Many modes.</p>
+            <h3>One persistent identity across every mode.</h3>
+            <p class="identity-copy">The companion keeps its name, voice style, memory, and working relationship while its behavior adapts to the task.</p>
           </div>
           <span id="profile-status" class="module-tag">Loading profile</span>
         </div>
         <div class="identity-basics">
-          <span>Native: Aerilonian.</span>
-          <span>Also speaks: English, Japanese, and your native language.</span>
+          <span>Public demo identity: generated sample.</span>
+          <span>Supports English, Japanese, and the user's native language.</span>
         </div>
         <div class="profile-grid" aria-live="polite">
           <div><span>Companion name</span><strong id="profile-name">Aerin Kaela Novareth</strong></div>
-          <div><span>Origin district</span><strong id="profile-origin">Aerilon, NovaNest district</strong></div>
-          <div><span>Affinity</span><strong id="profile-affinity">luminous memory gardens</strong></div>
-          <div><span>Familiar motif</span><strong id="profile-familiar">Lumicat</strong></div>
+          <div><span>Identity scope</span><strong id="profile-origin">Persistent across chat, voice, memory, and tasks</strong></div>
+          <div><span>Primary strengths</span><strong id="profile-affinity">Study, code, productivity, Japanese, creative, and support</strong></div>
+          <div><span>Demo motif</span><strong id="profile-familiar">Public generated avatar cue</strong></div>
           <div><span>Personality seed</span><strong id="profile-seed">calm, loyal, curious, gently playful, study-oriented</strong></div>
-          <div><span>Native language</span><strong id="profile-native">Aerilonian</strong></div>
-          <div><span>Known languages</span><strong id="profile-languages">Aerilonian, English, Japanese, Romanian</strong></div>
+          <div><span>Language policy</span><strong id="profile-native">User language first; Japanese coach available</strong></div>
+          <div><span>Supported languages</span><strong id="profile-languages">English, Japanese, Romanian</strong></div>
           <div><span>Memory style</span><strong id="profile-memory">reflective and adaptive</strong></div>
           <div><span>Voice style</span><strong id="profile-voice">warm, clear, soft, focused</strong></div>
           <div class="wide-profile-field"><span>Daily workflows</span><strong id="profile-workflows">turn goals into a three-step daily plan; convert study material into active recall prompts</strong></div>
         </div>
         <form id="companion-profile-form" class="profile-controls">
           <label>User name<input id="profile-user-name" type="text" autocomplete="name" placeholder="Optional"></label>
-          <label>User native language<input id="profile-native-language-input" type="text" placeholder="Romanian"></label>
+          <label>User language<input id="profile-native-language-input" type="text" placeholder="Romanian"></label>
           <label>Preferred tone<select id="profile-tone"><option value="calm">calm</option><option value="playful">playful</option><option value="analytical">analytical</option><option value="protective">protective</option><option value="energetic">energetic</option><option value="poetic">poetic</option></select></label>
           <label>Preferred affinity<select id="profile-affinity-input"><option value="random">random</option><option value="study">study</option><option value="code">code</option><option value="creativity">creativity</option><option value="emotional support">emotional support</option><option value="productivity">productivity</option></select></label>
           <label class="seed-field">Seed<input id="profile-seed-input" type="text" placeholder="Optional deterministic seed"></label>
@@ -102,7 +102,7 @@
       <section id="modes" class="module-card">
         <div class="module-heading">
           <div><p class="eyebrow">One Companion, Many Modes</p><h3>Switch the same identity into the right working state.</h3></div>
-          <span class="module-tag">Investor-safe public labels</span>
+          <span class="module-tag">Public demo modes</span>
         </div>
         <p id="mode-adaptation-text" class="muted">Aerin is adapting to Productivity Mode. Same companion, focused behavior.</p>
         <div class="mode-grid">
@@ -116,7 +116,7 @@
       </section>
 
       <section id="chat" class="module-card chat-module">
-        <div class="module-heading"><div><p class="eyebrow">Voice / Chat</p><h3>Talk to your companion</h3></div><span class="module-tag">Core Signal loop</span></div>
+        <div class="module-heading"><div><p class="eyebrow">Chat and Voice</p><h3>Talk to your companion</h3></div><span class="module-tag">Core Signal loop</span></div>
         <div id="chat-log" class="chat" aria-live="polite"></div>
         <form id="chat-form" class="composer">
           <label for="image-upload" class="upload-btn" title="Upload image"><i class="fa-solid fa-image"></i></label>
@@ -134,8 +134,8 @@
       <section class="module-grid">
         <article id="voice" class="module-card"><div class="module-heading"><div><p class="eyebrow">Voice</p><h3>TTS / STT controls</h3></div><span class="module-tag">Consent based</span></div><div class="control-stack"><label><input id="auto-play-toggle" type="checkbox" checked> Auto-play companion voice after responses</label><label><input id="stt-ready-toggle" type="checkbox" checked> Enable browser STT recording button</label><button id="voice-test" class="secondary-btn" type="button">Play latest companion voice</button></div><p class="muted">Cloud TTS, local fallback, microphone transcription, and playback routing live here.</p></article>
         <article id="vision" class="module-card"><div class="module-heading"><div><p class="eyebrow">Screen Context</p><h3>Latest OBS / screen frame</h3></div><button id="capture-vision" class="secondary-btn" type="button">Capture</button></div><div id="vision-preview" class="vision-preview">No screen context captured yet.</div><p id="vision-status" class="muted">Use Capture only when you consent to share current screen context.</p></article>
-        <article id="memory" class="module-card wide-card"><div class="module-heading"><div><p class="eyebrow">User-owned memory</p><h3>View / edit long-term memory</h3></div><button id="refresh-memory" class="secondary-btn" type="button">Refresh</button></div><div class="chip-row"><span>preference</span><span>project</span><span>study</span><span>workflow</span><span>personal</span></div><form id="memory-form" class="memory-form"><select id="memory-category" aria-label="Memory category"></select><input id="memory-content" type="text" placeholder="Add a user-owned memory..." required><button type="submit">Save memory</button></form><div id="memory-list" class="list-panel"></div></article>
-        <article id="tasks" class="module-card wide-card"><div class="module-heading"><div><p class="eyebrow">Today’s Plan</p><h3>Tasks, sprints, and follow-through</h3></div><span class="module-tag">Daily execution</span></div><form id="task-form" class="task-form"><select id="task-kind"><option value="workflow">Workflow</option><option value="study">Study</option><option value="project">Project</option></select><input id="task-title" type="text" placeholder="Add task" required><input id="task-details" type="text" placeholder="Task details"><button type="submit">Add</button></form><div id="task-list" class="list-panel"></div></article>
+        <article id="memory" class="module-card wide-card"><div class="module-heading"><div><p class="eyebrow">User-owned memory</p><h3>View / edit long-term memory</h3></div><button id="refresh-memory" class="secondary-btn" type="button">Refresh</button></div><div class="chip-row"><span>user profile</span><span>projects</span><span>language learning</span><span>coding history</span><span>emotional preferences</span></div><form id="memory-form" class="memory-form"><select id="memory-category" aria-label="Memory category"></select><input id="memory-content" type="text" placeholder="Add a user-owned memory..." required><button type="submit">Save memory</button></form><div id="memory-list" class="list-panel"></div></article>
+        <article id="tasks" class="module-card wide-card"><div class="module-heading"><div><p class="eyebrow">Today's Plan</p><h3>Tasks, sprints, and follow-through</h3></div><span class="module-tag">Daily execution</span></div><form id="task-form" class="task-form"><select id="task-kind"><option value="workflow">Workflow</option><option value="study">Study</option><option value="project">Project</option></select><input id="task-title" type="text" placeholder="Add task" required><input id="task-details" type="text" placeholder="Task details"><button type="submit">Add</button></form><div id="task-list" class="list-panel"></div></article>
       </section>
 
       <section id="privacy" class="module-card"><div class="module-heading"><div><p class="eyebrow">Privacy Center</p><h3>Your data. Your rules.</h3><p class="muted">Nothing is captured without consent. No hardware required for Signal Demo.</p></div><button id="revoke-access" class="secondary-btn" type="button">Revoke access</button></div><div class="privacy-grid"><label><input type="checkbox" data-privacy="microphone"> Microphone consent</label><label><input type="checkbox" data-privacy="camera"> Camera access</label><label><input type="checkbox" data-privacy="screen"> Screen context</label><label><input type="checkbox" data-privacy="memory" checked> Memory enabled</label><label><input type="checkbox" data-privacy="localFirst" checked> Local-first mode</label><div class="privacy-note">Demo toggles are stored locally in this browser.</div></div></section>
@@ -145,7 +145,7 @@
         <article class="module-card"><p class="eyebrow">Now</p><h3>Signal</h3><p>PC/mobile CompanionOS, chat, voice, memory, tasks, privacy, and consent-based context.</p></article>
         <article class="module-card later"><p class="eyebrow">Later</p><h3>Face</h3><p>Avatar, voice, customization, and creator ecosystem for companion expression.</p></article>
         <article class="module-card later"><p class="eyebrow">Later</p><h3>Vessel</h3><p>Future robotics embodiment, safe/social design, and expressive hardware.</p></article>
-        <article class="module-card later"><p class="eyebrow">Placeholder</p><h3>Wardrobe & skills marketplace — later</h3><p>Not included in Signal Demo.</p></article>
+        <article class="module-card later"><p class="eyebrow">Placeholder</p><h3>Wardrobe & skills marketplace (later)</h3><p>Not included in Signal Demo.</p></article>
       </section>
 
       <article id="system" class="module-card wide-card"><div class="module-heading"><div><p class="eyebrow">System</p><h3>Health checks and logs</h3></div><button id="refresh-system" class="secondary-btn" type="button">Run checks</button></div><div id="health-grid" class="health-grid"></div><div id="log-list" class="log-list"></div></article>

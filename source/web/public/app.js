@@ -79,6 +79,27 @@ const modeConfigs = {
   },
 };
 
+const blockedPublicIdentityNames = ['eve', 'lyriel', 'rea'];
+const internalLanguageLabels = ['aerilonian'];
+const preferredMemoryCategories = [
+  'user_profile',
+  'projects',
+  'language_learning',
+  'coding_history',
+  'emotional_preferences',
+  'startup_tasks',
+];
+const memoryCategoryLabels = {
+  user_profile: 'user profile',
+  projects: 'projects',
+  language_learning: 'language learning',
+  coding_history: 'coding history',
+  emotional_preferences: 'emotional preferences',
+  blocked_distractions: 'focus blockers',
+  startup_tasks: 'tasks and routines',
+  robotics_design: 'robotics design',
+};
+
 const fallbackCompanionProfile = {
   id: 'generated-aerin-kaela-novareth',
   name: 'Aerin Kaela Novareth',
@@ -374,12 +395,11 @@ function renderVision(payload) {
 async function loadMemory() {
   const payload = await fetchJson('/api/memory');
   if (memoryCategory.children.length === 0) {
-    const preferredCategories = ['preference', 'project', 'study', 'workflow', 'personal'];
-    const categories = [...new Set([...preferredCategories, ...(payload.categories ?? [])])];
+    const categories = [...new Set([...preferredMemoryCategories, ...(payload.categories ?? [])])];
     categories.forEach((category) => {
       const option = document.createElement('option');
       option.value = category;
-      option.textContent = category.replaceAll('_', ' ');
+      option.textContent = formatMemoryCategory(category);
       memoryCategory.appendChild(option);
     });
   }
@@ -394,7 +414,7 @@ async function loadMemory() {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'list-row memory-row';
-    row.innerHTML = `<strong>${memory.category.replaceAll('_', ' ')}</strong><span>${memory.content}</span><small>${memory.source} · ${Math.round(memory.confidence * 100)}%</small>`;
+    row.innerHTML = `<strong>${formatMemoryCategory(memory.category)}</strong><span>${memory.content}</span><small>${memory.source} · ${Math.round(memory.confidence * 100)}%</small>`;
     row.addEventListener('click', () => {
       editingMemoryId = memory.id;
       memoryCategory.value = memory.category;
@@ -595,6 +615,43 @@ function workflowList(items) {
   return Array.isArray(items) && items.length > 0 ? items.join('; ') : 'No workflows set yet.';
 }
 
+function normalizePublicText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z]/g, '');
+}
+
+function hasBlockedPublicIdentityName(value) {
+  const normalized = normalizePublicText(value);
+  return blockedPublicIdentityNames.some((name) => normalized.includes(name));
+}
+
+function publicCompanionName(profile, useShortName = false) {
+  const candidate = useShortName ? (profile.shortName || profile.name) : profile.name;
+  if (candidate && !hasBlockedPublicIdentityName(candidate)) {
+    return candidate;
+  }
+  return useShortName ? 'Companion' : 'Generated Gepetto companion';
+}
+
+function publicLanguages(profile) {
+  const languages = Array.isArray(profile.knownLanguages) ? profile.knownLanguages : [];
+  const visibleLanguages = languages.filter((language) => !internalLanguageLabels.includes(language.toLowerCase()));
+  const userLanguage = profile.userNativeLanguage;
+
+  if (userLanguage && !visibleLanguages.some((language) => language.toLowerCase() === userLanguage.toLowerCase())) {
+    visibleLanguages.push(userLanguage);
+  }
+
+  return textList(visibleLanguages, "English, Japanese, and the user's native language");
+}
+
+function formatMemoryCategory(category) {
+  return memoryCategoryLabels[category] || String(category || 'memory').replaceAll('_', ' ');
+}
+
 function storeCompanionProfile(profile) {
   companionProfile = profile || fallbackCompanionProfile;
   localStorage.setItem(companionProfileStorageKey, JSON.stringify(companionProfile));
@@ -602,17 +659,17 @@ function storeCompanionProfile(profile) {
 
 function renderProfile(profile) {
   const safeProfile = profile || fallbackCompanionProfile;
-  document.getElementById('profile-name').textContent = safeProfile.name || fallbackCompanionProfile.name;
-  document.getElementById('profile-origin').textContent = safeProfile.origin?.cityDistrict || fallbackCompanionProfile.origin.cityDistrict;
-  document.getElementById('profile-affinity').textContent = safeProfile.affinity || fallbackCompanionProfile.affinity;
-  document.getElementById('profile-familiar').textContent = safeProfile.familiarMotif || fallbackCompanionProfile.familiarMotif;
+  document.getElementById('profile-name').textContent = publicCompanionName(safeProfile);
+  document.getElementById('profile-origin').textContent = 'Persistent across chat, voice, memory, tasks, and modes.';
+  document.getElementById('profile-affinity').textContent = 'Study, code, productivity, Japanese, creative, and support modes.';
+  document.getElementById('profile-familiar').textContent = 'Public generated avatar cue';
   document.getElementById('profile-seed').textContent = textList(safeProfile.personalitySeed);
-  document.getElementById('profile-native').textContent = safeProfile.nativeLanguage || fallbackCompanionProfile.nativeLanguage;
-  document.getElementById('profile-languages').textContent = textList(safeProfile.knownLanguages);
+  document.getElementById('profile-native').textContent = 'User language first; Japanese coach available.';
+  document.getElementById('profile-languages').textContent = publicLanguages(safeProfile);
   document.getElementById('profile-memory').textContent = safeProfile.memoryStyle || fallbackCompanionProfile.memoryStyle;
   document.getElementById('profile-voice').textContent = safeProfile.voiceStyle || fallbackCompanionProfile.voiceStyle;
   document.getElementById('profile-workflows').textContent = workflowList(safeProfile.dailyWorkflows);
-  if (presenceName) presenceName.textContent = safeProfile.shortName || safeProfile.name || 'Your companion';
+  if (presenceName) presenceName.textContent = publicCompanionName(safeProfile, true);
   if (presenceVoice) presenceVoice.textContent = safeProfile.voiceStyle || 'Ready with consent';
   if (presenceMemory) presenceMemory.textContent = 'User-owned memory';
   if (profileNativeLanguageInput && !profileNativeLanguageInput.value) {
