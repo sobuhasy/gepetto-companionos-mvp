@@ -21,7 +21,7 @@ export class VTubeBody implements RobotBody {
         await this.bridge.free();
     }
 
-    public async setExpression(expression: string, durationMs: 5000): Promise<void> {
+    public async setExpression(expression: string, durationMs = 5000): Promise<void> {
         const expressionFile = EXPRESSION_FILES[expression];
 
         if(!expressionFile) {

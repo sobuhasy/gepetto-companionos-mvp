@@ -587,7 +587,7 @@ form.addEventListener('submit', async (event) => {
       }),
     });
 
-    if (autoPlayToggle.checked && !(await playLatestVoice())) {
+    if (autoPlayToggle.checked && payload.spokenText && !(await playLatestVoice())) {
       addMessage('companion', 'I answered, but audio playback failed. Check voice output routing.');
     }
 

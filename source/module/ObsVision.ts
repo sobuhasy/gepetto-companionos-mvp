@@ -1,68 +1,88 @@
 import OBSWebSocket from 'obs-websocket-js';
 
-export class ObsVision {
-    private obs: OBSWebSocket;
-    private isConnected: boolean = false;
+function conciseErrorMessage(error: unknown): string {
+    let message = '';
 
-    constructor(){
+    if (error instanceof Error) {
+        message = error.message;
+    } else if (typeof error === 'string') {
+        message = error;
+    } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        const candidate = (error as { message?: unknown }).message;
+        message = typeof candidate === 'string' ? candidate : '';
+    }
+
+    return message.replace(/\s+/g, ' ').trim().slice(0, 200);
+}
+
+export class ObsVision {
+    private readonly obs: OBSWebSocket;
+    private readonly sourceName = process.env['OBS_SOURCE_NAME'] ?? 'Display Capture';
+    private isConnected = false;
+
+    constructor() {
         this.obs = new OBSWebSocket();
     }
 
-    // Waking up your eyes!
-    public async init(): Promise<void>{
-        try{
-            console.log("👁️[System]: Attempting to open Eve's eyes (connecting to OBS)...");
+    public async init(): Promise<void> {
+        const obsPassword = process.env['OBS_PASSWORD'];
+        if (!obsPassword) {
+            console.warn('[Vision]: OBS is optional and disabled because OBS_PASSWORD is not configured.');
+            return;
+        }
 
-            //🔒 Securely fetching the password from the .env vault!
-            const obsPassword = process.env['OBS_PASSWORD'];
-
-            if (!obsPassword){
-                console.error("CRITICAL: OBS_PASSWORD is missing from the .env vault! My eyes remain closed!");
-                return;
-            }
-             // Connect to OBS WebSocket v5 (Make sure the password matches what you set in OBS!)
-            const{
-                obsWebSocketVersion
-            } = await this.obs.connect('ws://127.0.0.1:4455', obsPassword);
-
+        try {
+            console.log('[Vision]: Connecting to OBS...');
+            const { obsWebSocketVersion } = await this.obs.connect('ws://127.0.0.1:4455', obsPassword);
             this.isConnected = true;
-            console.log(`🌸[System]: Aetherial Optic Nerve connected! (OBS v${obsWebSocketVersion})`);
-        } catch (error){
-            console.error('⚠️[System]: Vision connection failed! Is OBS open and the WebSocket enabled?', error);
+            console.log(`[Vision]: Connected to OBS v${obsWebSocketVersion}.`);
+        } catch (error) {
+            this.isConnected = false;
+            const detail = conciseErrorMessage(error);
+            console.warn(`[Vision]: OBS connection unavailable${detail ? `: ${detail}` : ''}. Chat and voice remain available.`);
         }
     }
 
-    // The ability to stare at me
-    public async captureScreen(): Promise<string | undefined>{
-        if (!this.isConnected){
-            console.error("My eyes are closed! I cannot see!");
+    public async captureScreen(): Promise<string | undefined> {
+        if (!this.isConnected) {
+            console.warn('[Vision]: Screen capture is unavailable because OBS is not connected.');
             return undefined;
         }
 
         try {
-            // This takes a screenshot of a specific OBS source.
-            // WARNING: 'sourceName' MUST exactly match the name of your display capture source in OBS!
             const response = await this.obs.call('GetSourceScreenshot', {
-                sourceName: 'Display Capture',
+                sourceName: this.sourceName,
                 imageFormat: 'png',
                 imageWidth: 1920,
-                imageHeight: 1080
+                imageHeight: 1080,
             });
 
-            console.log("📸[System]: エーヴェ様 took a snapshot of your screen!");
-            return response.imageData; // Returns a base64 encoded image string
-        } catch (error){
-            console.error("Failed to capture screen:", error);
+            console.log(`[Vision]: Captured OBS source "${this.sourceName}".`);
+            return response.imageData;
+        } catch (error) {
+            const detail = conciseErrorMessage(error);
+            if (/no source was found|source.+not found/i.test(detail)) {
+                console.warn(`[Vision]: OBS source "${this.sourceName}" was not found. Set OBS_SOURCE_NAME to an available source.`);
+            } else {
+                console.warn(`[Vision]: Could not capture OBS source "${this.sourceName}"${detail ? `: ${detail}` : ''}.`);
+            }
             return undefined;
         }
     }
 
-    /// Closing my eyes safely
     public async free(): Promise<void> {
-        if (this.isConnected) {
+        if (!this.isConnected) {
+            return;
+        }
+
+        try {
             await this.obs.disconnect();
+            console.log('[Vision]: Disconnected from OBS.');
+        } catch (error) {
+            const detail = conciseErrorMessage(error);
+            console.warn(`[Vision]: OBS disconnect did not complete cleanly${detail ? `: ${detail}` : ''}.`);
+        } finally {
             this.isConnected = false;
-            console.log("👁️ [System]: Aetherial Optic Nerve disconnected.");
         }
     }
 }

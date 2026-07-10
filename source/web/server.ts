@@ -21,12 +21,14 @@ const TMP_DIR = join(process.cwd(), 'tmp');
 const MEMORY_PATH = join(process.cwd(), 'data', 'ltm', 'memories.jsonl');
 const TASKS_PATH = join(process.cwd(), 'data', 'dashboard', 'tasks.json');
 const COMPANION_PROFILE_PATH = join(process.cwd(), 'data', 'companion', 'generated-profile.json');
+const OBS_SOURCE_NAME = process.env['OBS_SOURCE_NAME'] ?? 'Display Capture';
+const OBS_SOURCE_LABEL = `OBS ${OBS_SOURCE_NAME}`;
 const healthService = new SystemHealthService();
 const app = new AetherialApp();
 let isReady = false;
 let currentGeneratedProfile: GeneratedCompanionProfile | undefined;
 let latestVision: { image?: string; capturedAt?: string; source: string; status: string } = {
-    source: 'OBS Display Capture',
+    source: OBS_SOURCE_LABEL,
     status: 'No screen context has been captured in this web session yet.',
 };
 const eventLog: DashboardLogEntry[] = [];
@@ -508,15 +510,17 @@ async function handleVision(req: IncomingMessage, res: ServerResponse): Promise<
             await ensureInitialized();
             const image = await app.captureVision();
             latestVision = image
-                ? { image, capturedAt: new Date().toISOString(), source: 'OBS Display Capture', status: 'Captured latest OBS/screen context.' }
-                : { source: 'OBS Display Capture', status: 'OBS capture unavailable. Check OBS WebSocket and source name.' };
+                ? { image, capturedAt: new Date().toISOString(), source: OBS_SOURCE_LABEL, status: 'Captured latest OBS/screen context.' }
+                : { source: OBS_SOURCE_LABEL, status: `OBS capture unavailable. Check OBS WebSocket and OBS_SOURCE_NAME (currently "${OBS_SOURCE_NAME}").` };
             addLog(image ? 'info' : 'warn', latestVision.status);
-            respondJson(res, image ? 200 : 503, latestVision);
+            respondJson(res, image ? 200 : 503, image ? latestVision : { ...latestVision, error: latestVision.status });
             return true;
-        } catch (error) {
-            addLog('error', 'Vision capture failed.');
-            console.error('Failed to capture vision:', error);
-            respondJson(res, 500, { error: 'Failed to capture vision.' });
+        } catch {
+            const status = 'Vision capture is unavailable. Chat and voice remain available.';
+            latestVision = { source: OBS_SOURCE_LABEL, status };
+            addLog('warn', status);
+            console.warn(`[Vision]: ${status}`);
+            respondJson(res, 503, { ...latestVision, error: status });
             return true;
         }
     }
@@ -630,6 +634,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
             const message = typeof body['message'] === 'string' ? body['message'].trim() : '';
             const prompt = legacyPrompt || message;
             const image = typeof body['image'] === 'string' ? body['image'] : undefined;
+            const requestScreenContext = body['useScreenContext'] === true || body['captureScreen'] === true;
             const modeInput = optionalString(body['mode']) ?? optionalString(body['companionMode']);
             const mode = toCompanionMode(modeInput);
             const companionProfile = isGeneratedCompanionProfile(body['companionProfile'])
@@ -641,7 +646,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
                 return true;
             }
 
-            const result = await app.interact(prompt, 'text', image, mode, companionProfile);
+            const result = await app.interact(prompt, 'text', image, mode, companionProfile, requestScreenContext);
             addLog(result.success ? 'info' : 'warn', `Chat interaction ${result.success ? 'completed' : 'failed'} in ${mode} mode.`);
             respondJson(res, 200, { ...result, mode });
             return true;

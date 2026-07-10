@@ -12,6 +12,9 @@ const RUNTIME_SYSTEM_PROMPT = [
     'Do not claim literal real-world sentience.',
 ].join(' ');
 
+const DEFAULT_CHAT_MODEL = 'gpt-5.4-mini';
+const MAX_COMPLETION_TOKENS = 1500;
+
 export class LlmOpenAI implements Module {
     private client: OpenAI | undefined;
     private systemPrompt = RUNTIME_SYSTEM_PROMPT;
@@ -54,17 +57,22 @@ export class LlmOpenAI implements Module {
             }
 
             const response = await this.client.chat.completions.create({
-                model: 'gpt-5.4-mini',
+                model: process.env['OPENAI_CHAT_MODEL']?.trim() || DEFAULT_CHAT_MODEL,
                 messages: [
                     { role: 'system', content: this.systemPrompt },
                     { role: 'user', content: contentArray },
                 ],
-                max_completion_tokens: 500,
+                // The runtime requests JSON, but AetherialApp must still parse every response defensively.
+                max_completion_tokens: MAX_COMPLETION_TOKENS,
             });
 
             const replyText = response.choices[0]?.message?.content;
 
-            if (replyText) {
+            if (response.choices[0]?.finish_reason === 'length') {
+                console.warn('[Brain]: Response reached the completion token limit; using the available text safely.');
+            }
+
+            if (replyText?.trim()) {
                 return { success: true, value: replyText };
             }
 
