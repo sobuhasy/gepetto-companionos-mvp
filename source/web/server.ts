@@ -10,6 +10,7 @@ import { MemoryCategory, MemoryRecord, MemorySource } from '../ltm/ltm_interface
 import { toCompanionMode } from '../companion/CompanionProfile';
 import { DEFAULT_GENERATED_COMPANION_PROFILE, generateCompanionProfile } from '../companion/CompanionIdentityGenerator';
 import { COMPANION_MODES } from '../companion/GeneratedCompanionProfile';
+import { getSafeTypeCastErrorMessage } from '../tts/TtsTypeCast';
 import type { CompanionIdentityGeneratorInput } from '../companion/CompanionIdentityGenerator';
 import type { GeneratedCompanionProfile } from '../companion/GeneratedCompanionProfile';
 
@@ -598,6 +599,22 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
         const health = await healthService.check(isReady);
         respondJson(res, 200, { online: true, ready: isReady, health, logs: eventLog });
         return true;
+    }
+
+    if (req.url === '/api/voice/test' && req.method === 'POST') {
+        try {
+            await ensureInitialized();
+            const result = await app.generateVoiceTest();
+            const message = 'Voice test generated.';
+            addLog('info', `${message}${result.retriedWithoutPrompt ? ' Retry without prompt was used.' : ''}`);
+            respondJson(res, 200, { success: true, message, audioUrl: result.audioUrl });
+            return true;
+        } catch (error) {
+            const safeError = getSafeTypeCastErrorMessage(error);
+            addLog('warn', `Voice test failed: ${safeError}`);
+            respondJson(res, 200, { success: false, error: safeError });
+            return true;
+        }
     }
 
     if (req.url === '/api/transcribe' && req.method === 'POST') {

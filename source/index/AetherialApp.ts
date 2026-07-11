@@ -1,5 +1,6 @@
 import { LlmOpenAI } from "../module/LlmOpenAI";
-import { TtsTypeCast } from "../tts/TtsTypeCast";
+import { getSafeTypeCastErrorMessage, TtsTypeCast } from "../tts/TtsTypeCast";
+import type { TypeCastGenerationResult } from "../tts/TtsTypeCast";
 import { MicWhisper } from "../stt/MicWhisper";
 import { RobotBody } from "../body/RobotBody";
 import { BodyBackend, createRobotBody } from "../body/BodyFactory";
@@ -208,11 +209,18 @@ function hasResponseEnvelopeEvidence(value: string): boolean {
             || contractFieldCount > 1);
 }
 
+function hasNestedResponseEnvelopeEvidence(value: string): boolean {
+    const trimmed = value.trim();
+    return /^(?:```(?:json)?\s*)?\{/i.test(trimmed)
+        || /^["'](?:text|emotion|speak|expressionDurationMs)["']\s*:/i.test(trimmed)
+        || (/^["']/.test(trimmed) && /\\["'](?:text|emotion|speak)\\["']\s*:/i.test(trimmed));
+}
+
 function unwrapNestedResponse(response: EveResponse): EveResponse {
     let current = response;
 
     for (let depth = 0; depth < JSON_PARSE_DEPTH; depth += 1) {
-        if (!hasResponseEnvelopeEvidence(current.text)) {
+        if (!hasNestedResponseEnvelopeEvidence(current.text)) {
             break;
         }
 
@@ -225,7 +233,7 @@ function unwrapNestedResponse(response: EveResponse): EveResponse {
         current = nested;
     }
 
-    return hasResponseEnvelopeEvidence(current.text)
+    return hasNestedResponseEnvelopeEvidence(current.text)
         ? { text: SAFE_RESPONSE_FALLBACK, emotion: 'neutral', speak: true }
         : current;
 }
@@ -311,7 +319,11 @@ export class AetherialApp {
         this.eveEyes = new ObsVision();
 
         await this.eveBrain.init();
-        await this.eveVoice.init();
+        try {
+            await this.eveVoice.init();
+        } catch (error) {
+            console.warn(`[Voice]: ${getSafeTypeCastErrorMessage(error)} Continuing in text-only mode.`);
+        }
         await this.eveVoiceBackup.init();
         await this.eveBody.init();
         await this.eveEyes.init();
@@ -400,6 +412,21 @@ export class AetherialApp {
         return this.requireEyes().captureScreen();
     }
 
+    async generateVoiceTest(): Promise<TypeCastGenerationResult> {
+        if (!this.initialized) {
+            throw new Error('AetherialApp not initialized');
+        }
+        if (process.env["COMPANION_VOICE_ENABLED"] === "false") {
+            throw new Error('Companion voice is disabled by COMPANION_VOICE_ENABLED.');
+        }
+
+        const result = await this.requireVoice().generateTest();
+        if (!result) {
+            throw new Error('Voice test text was empty after sanitization.');
+        }
+        return result;
+    }
+
     async shutdown(): Promise<void> {
         if (!this.initialized) {
             return;
@@ -420,28 +447,32 @@ export class AetherialApp {
             return undefined;
         }
 
-        const speechText = this.toSpeechPreview(text);
-        if (!speechText) {
-            console.log("[Voice]: No safe speech preview generated.");
-            return undefined;
-        }
-
+        const localFallbackText = this.toSpeechPreview(text);
         const selectedVoiceId = process.env["COMPANION_VOICE_ID"] ?? voiceId;
 
         try {
-            await this.requireVoice().generate(speechText, selectedVoiceId);
-            return speechText;
+            const result = await this.requireVoice().generateWithResult(text, selectedVoiceId);
+            if (!result) {
+                console.log("[Voice]: No safe TypeCast speech text generated.");
+                return undefined;
+            }
+            return result.spokenText;
         } catch (error) {
-            console.warn("[Voice]: TypeCast failed. Continuing text-only unless local fallback is enabled.", error);
+            console.warn(`[Voice]: ${getSafeTypeCastErrorMessage(error)} Continuing text-only unless local fallback is enabled.`);
         }
 
         if (process.env["ENABLE_LOCAL_TTS_FALLBACK"] !== "true") {
             return undefined;
         }
 
+        if (!localFallbackText) {
+            console.log("[Voice]: No safe local fallback speech text generated.");
+            return undefined;
+        }
+
         try {
-            await this.requireBackupVoice().generate(speechText);
-            return speechText;
+            await this.requireBackupVoice().generate(localFallbackText);
+            return localFallbackText;
         } catch (error) {
             console.warn("[Voice]: Local fallback failed. Text response remains available.", error);
             return undefined;

@@ -62,6 +62,12 @@ Create a local `.env` file for optional API-backed features:
 ```env
 OPENAI_API_KEY="your_openai_api_key"
 TYPECAST_API_KEY="your_typecast_api_key"
+TYPECAST_MODEL="ssfm-v30"
+TYPECAST_MAX_CHARS="900"
+TYPECAST_EMOTION_TYPE="smart"
+COMPANION_VOICE_ID="your_typecast_voice_id"
+COMPANION_VOICE_ENABLED="true"
+ENABLE_LOCAL_TTS_FALLBACK="false"
 OBS_PASSWORD="your_obs_websocket_password"
 ROBOT_BODY_BACKEND="vtube"
 ```
@@ -96,3 +102,7 @@ If another process owns port 3000, the web server now falls back to the next ava
 ### COM5 / Pico serial error
 
 The Signal Demo does not require a Pico. Keep `ROBOT_BODY_BACKEND=vtube` unless you intentionally want physical serial hardware. Only use `pico` or `hybrid` when the device is connected and `PICO_SERIAL_PORT` points to the correct Windows COM port.
+
+### TypeCast 422 Validation Error
+
+A valid TypeCast API key can still receive HTTP 422 when the request payload does not match the selected voice or model. Check that `COMPANION_VOICE_ID` supports `TYPECAST_MODEL`, and reduce `TYPECAST_MAX_CHARS` if needed. Set `TYPECAST_EMOTION_TYPE=""` or `TYPECAST_EMOTION_TYPE="off"` to omit the prompt object; the runtime also retries one validation failure without the prompt automatically. If TypeCast still rejects the request, CompanionOS continues in text-only mode and keeps the full answer visible in the browser.

@@ -484,8 +484,29 @@ if (micButton) {
 
 sttReadyToggle.addEventListener('change', () => setControlsDisabled(false));
 voiceTestButton.addEventListener('click', async () => {
-  if (!(await playLatestVoice())) {
-    addMessage('companion', 'Voice playback test failed. Generate a response first, then verify audio output routing.');
+  voiceTestButton.disabled = true;
+  try {
+    const payload = await fetchJson('/api/voice/test', { method: 'POST' });
+    if (!payload.success) {
+      throw new Error(payload.error ?? 'TypeCast voice test failed.');
+    }
+
+    const audioUrl = typeof payload.audioUrl === 'string' ? payload.audioUrl : '';
+    const cacheBust = `${audioUrl}${audioUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    const playedGeneratedAudio = audioUrl ? await playAudioWithRetry(cacheBust) : false;
+    if (!playedGeneratedAudio && !(await playLatestVoice())) {
+      addMessage('companion', 'Voice test generated, but browser playback failed. Check audio output routing.');
+      return;
+    }
+
+    addMessage('companion', payload.message ?? 'Voice test generated.');
+  } catch (error) {
+    const fallbackPlayed = await playLatestVoice();
+    const fallbackNote = fallbackPlayed ? ' The latest existing voice file was played instead.' : '';
+    const reason = String(error.message || 'TypeCast voice test failed').replace(/[.\s]+$/, '');
+    addMessage('companion', `Voice test failed: ${reason}.${fallbackNote}`);
+  } finally {
+    voiceTestButton.disabled = false;
   }
 });
 
