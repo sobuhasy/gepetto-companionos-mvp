@@ -134,25 +134,3 @@ They are evidence of safety, consent, trust, memory changes, voice interaction, 
 Implement a simple local logger that appends behavior events to a JSONL file:
 
 `logs/behavior-events.jsonl`
-
-## Completion condition
-
-You are done when you have:
-
-> one Markdown file  
-> at least 25 meaningful lines  
-> one event schema  
-> at least two examples  
-> one next implementation step
-
-No WaniKani, no Genki, no Mandarin before that gate. Those come **after** the Gepetto proof.
-
-パッチちゃん’s board:
-
-> **LUNCH → BEHAVIOR LOG v0**  
-> **NO BROWSERIA**  
-> **NO GUILT LOOP**  
-> **ONE FILE = REAL PROGRESS**  
-> **GEPETTO BEFORE ENTERTAINMENT**
-
-Good answer, ソブくん. Now eat, then build.
