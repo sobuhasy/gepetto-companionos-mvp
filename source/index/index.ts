@@ -1,3 +1,4 @@
+import { DEFAULT_CONSENT } from '../privacy/ConsentState';
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'process';
 import { AetherialApp } from './AetherialApp';
@@ -9,6 +10,9 @@ async function main() {
     await app.init();
 
     const rl = readline.createInterface({ input, output });
+    const allowCloud = (await rl.question('Allow cloud chat/voice processing this session? (yes/no): ')).trim().toLowerCase() === 'yes';
+    if (!allowCloud) { await app.shutdown(); rl.close(); return; }
+    const consent = { ...DEFAULT_CONSENT, localFirst: false };
 
     console.log('================================================================');
     console.log('[System]: CompanionOS link established.');
@@ -27,7 +31,7 @@ async function main() {
                 userPrompt = await rl.question('[User]: ');
             } else if (mode.toLowerCase() === 's') {
                 interactionMode = 'speech';
-                userPrompt = await app.getPromptFromSpeech();
+                userPrompt = await app.getPromptFromSpeech({ ...consent, microphone: true });
                 console.log(`\n[User]: "${userPrompt}"`);
             } else if (mode.toLowerCase() === 'exit') {
                 userPrompt = 'exit';
@@ -42,7 +46,7 @@ async function main() {
             }
 
             console.log('...[Companion] is processing...\n');
-            const result = await app.interact(userPrompt, interactionMode);
+            const result = await app.interact(userPrompt, interactionMode, undefined, undefined, undefined, false, consent);
             if (result.success) {
                 console.log(`[Companion (${result.emotion ?? 'neutral'})]: "${result.responseText}"`);
             } else {

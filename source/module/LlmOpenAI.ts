@@ -1,5 +1,5 @@
 import { OpenAI } from 'openai';
-import { Module } from './module_interface';
+import type { LlmProvider } from './LlmProvider';
 import { Option } from './Option';
 import * as dotenv from 'dotenv';
 
@@ -15,7 +15,7 @@ const RUNTIME_SYSTEM_PROMPT = [
 const DEFAULT_CHAT_MODEL = 'gpt-5.4-mini';
 const MAX_COMPLETION_TOKENS = 1500;
 
-export class LlmOpenAI implements Module {
+export class LlmOpenAI implements LlmProvider {
     private client: OpenAI | undefined;
     private systemPrompt = RUNTIME_SYSTEM_PROMPT;
 

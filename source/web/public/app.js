@@ -221,7 +221,14 @@ function addMessage(role, text, imageUrl = null) {
   chat.scrollTop = chat.scrollHeight;
 }
 
+function getConsent() {
+  const consent = { microphone: false, camera: false, screen: false, memory: false, localFirst: true };
+  document.querySelectorAll('[data-privacy]').forEach(input => { consent[input.dataset.privacy] = input.checked; });
+  return consent;
+}
+
 async function fetchJson(url, options = {}) {
+  options.headers = { ...options.headers, 'X-Companion-Consent': JSON.stringify(getConsent()) };
   const response = await fetch(url, options);
   const payload = await response.json();
   if (!response.ok) {
@@ -257,6 +264,9 @@ async function toggleRecording() {
     return;
   }
 
+  if (!getConsent().microphone || getConsent().localFirst) {
+    addMessage('companion', 'Enable microphone consent and disable local-first mode for cloud transcription.'); return;
+  }
   if (!navigator.mediaDevices?.getUserMedia) {
     addMessage('companion', 'Microphone input is not supported in this browser.');
     return;
@@ -393,6 +403,7 @@ function renderVision(payload) {
 }
 
 async function loadMemory() {
+  if (!getConsent().memory) { memoryList.textContent = 'Enable memory consent to view and manage memories.'; return; }
   const payload = await fetchJson('/api/memory');
   if (memoryCategory.children.length === 0) {
     const categories = [...new Set([...preferredMemoryCategories, ...(payload.categories ?? [])])];
@@ -411,11 +422,21 @@ async function loadMemory() {
   }
 
   payload.memories.slice(0, 30).forEach((memory) => {
-    const row = document.createElement('button');
-    row.type = 'button';
+    const row = document.createElement('div');
     row.className = 'list-row memory-row';
-    row.innerHTML = `<strong>${formatMemoryCategory(memory.category)}</strong><span>${memory.content}</span><small>${memory.source} · ${Math.round(memory.confidence * 100)}%</small>`;
-    row.addEventListener('click', () => {
+    const content = document.createElement('span');
+    content.textContent = `${formatMemoryCategory(memory.category)}: ${memory.content}`;
+    const edit = document.createElement('button'); edit.type = 'button'; edit.textContent = 'Edit';
+    const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Delete';
+    remove.addEventListener('click', async () => {
+      try {
+        await fetchJson('/api/memory', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: memory.id }) });
+        if (editingMemoryId === memory.id) { editingMemoryId = null; memoryContent.value = ''; }
+        await loadMemory(); await loadSystemStatus();
+      } catch (error) { memoryList.textContent = error.message; }
+    });
+    row.append(content, edit, remove);
+    edit.addEventListener('click', () => {
       editingMemoryId = memory.id;
       memoryCategory.value = memory.category;
       memoryContent.value = memory.content;
@@ -452,6 +473,7 @@ async function loadTasks() {
 }
 
 imageUpload.addEventListener('change', (e) => {
+  if (!getConsent().camera) { imageUpload.value = ''; addMessage('companion', 'Enable camera/visual consent to attach an image.'); return; }
   const file = e.target.files[0];
   if (file) {
     const reader = new FileReader();
@@ -532,6 +554,7 @@ memoryForm.addEventListener('submit', async (event) => {
     confidence: 0.85,
     source: 'manual',
   };
+  try {
   await fetchJson('/api/memory', {
     method: editingMemoryId ? 'PATCH' : 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -541,6 +564,7 @@ memoryForm.addEventListener('submit', async (event) => {
   memoryContent.value = '';
   await loadMemory();
   await loadSystemStatus();
+  } catch (error) { memoryList.textContent = error.message; }
 });
 
 refreshMemory.addEventListener('click', loadMemory);
@@ -799,6 +823,10 @@ function loadPrivacyControls() {
     }
     input.addEventListener('change', () => {
       localStorage.setItem(key, String(input.checked));
+      if (!getConsent().microphone && isRecording && mediaRecorder) mediaRecorder.stop();
+      if (!getConsent().screen) { visionPreview.replaceChildren(); visionStatus.textContent = 'Screen consent disabled.'; }
+      if (!getConsent().camera) removeImageBtn.click();
+      if (input.dataset.privacy === 'memory') loadMemory().catch(error => { memoryList.textContent = error.message; });
       if (input.dataset.privacy === 'memory' && presenceMemory) {
         presenceMemory.textContent = input.checked ? 'User-owned memory' : 'Memory paused';
       }
@@ -814,9 +842,14 @@ generateCompanionButton?.addEventListener('click', generateCompanion);
 saveCompanionButton?.addEventListener('click', saveCompanion);
 revokeAccessButton?.addEventListener('click', () => {
   document.querySelectorAll('[data-privacy]').forEach((input) => {
-    input.checked = false;
-    localStorage.setItem(`gepetto-privacy-${input.dataset.privacy}`, 'false');
+    input.checked = input.dataset.privacy === 'localFirst';
+    localStorage.setItem(`gepetto-privacy-${input.dataset.privacy}`, String(input.checked));
   });
+  if (isRecording && mediaRecorder) mediaRecorder.stop();
+  loadMemory();
+  removeImageBtn.click();
+  visionPreview.replaceChildren();
+  visionStatus.textContent = 'Screen consent disabled.';
   if (presenceMemory) presenceMemory.textContent = 'Memory paused';
   if (presencePrivacy) presencePrivacy.textContent = 'Access revoked';
 });

@@ -1,10 +1,8 @@
 import { Module } from "../module/module_interface";
 
-export type RobotStatusLight =
-    | "idle"
-    | "listening"
-    | "thinking"
-    | "speaking";
+import type { AvatarActivity } from './AvatarState';
+
+export type RobotStatusLight = AvatarActivity;
 
 export interface RobotBody extends Module {
     setExpression(expression: string, durationMs?: number): Promise<void>;

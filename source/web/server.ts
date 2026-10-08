@@ -1,3 +1,5 @@
+import { parseConsent, requireConsent, requireCloudConsent, ConsentError } from '../privacy/ConsentState';
+import { JsonLongTermMemory } from '../ltm/JsonLongTermMemory';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
@@ -20,6 +22,7 @@ const MAX_PORT_FALLBACKS = 10;
 const PUBLIC_DIR = join(process.cwd(), 'source', 'web', 'public');
 const TMP_DIR = join(process.cwd(), 'tmp');
 const MEMORY_PATH = join(process.cwd(), 'data', 'ltm', 'memories.jsonl');
+const memoryStore = new JsonLongTermMemory(MEMORY_PATH);
 const TASKS_PATH = join(process.cwd(), 'data', 'dashboard', 'tasks.json');
 const COMPANION_PROFILE_PATH = join(process.cwd(), 'data', 'companion', 'generated-profile.json');
 const OBS_SOURCE_NAME = process.env['OBS_SOURCE_NAME'] ?? 'Display Capture';
@@ -142,7 +145,9 @@ async function parseBody(req: IncomingMessage): Promise<Record<string, unknown>>
     }
 
     const raw = Buffer.concat(chunks).toString('utf8');
-    return JSON.parse(raw) as Record<string, unknown>;
+    const value: unknown = JSON.parse(raw);
+    if (!isRecord(value)) throw new SyntaxError('Expected a JSON object.');
+    return value;
 }
 
 function respondJson(res: ServerResponse, statusCode: number, payload: unknown): void {
@@ -316,29 +321,7 @@ async function transcribeAudio(audioBase64: string, mimeType: string): Promise<s
     }
 }
 
-async function loadMemories(): Promise<MemoryRecord[]> {
-    try {
-        const raw = await readFile(MEMORY_PATH, 'utf-8');
-        return raw
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean)
-            .map((line) => JSON.parse(line) as MemoryRecord)
-            .filter((memory) => typeof memory.id === 'string' && typeof memory.content === 'string')
-            .sort((a, b) => Date.parse(b.lastUsedAt ?? b.createdAt) - Date.parse(a.lastUsedAt ?? a.createdAt));
-    } catch (error) {
-        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
-            return [];
-        }
-        throw error;
-    }
-}
-
-async function saveMemories(memories: MemoryRecord[]): Promise<void> {
-    await mkdir(dirname(MEMORY_PATH), { recursive: true });
-    const serialized = memories.map((memory) => JSON.stringify(memory)).join('\n');
-    await writeFile(MEMORY_PATH, serialized ? `${serialized}\n` : '', 'utf-8');
-}
+async function loadMemories(): Promise<MemoryRecord[]> { return memoryStore.query({ limit: Number.MAX_SAFE_INTEGER }); }
 
 function toMemoryCategory(value: unknown): MemoryCategory {
     return memoryCategories.includes(value as MemoryCategory) ? value as MemoryCategory : 'projects';
@@ -361,12 +344,12 @@ function toDashboardTaskKind(value: unknown): DashboardTask['kind'] {
 }
 
 async function handleMemory(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-    if (req.url?.startsWith('/api/memory') !== true) {
+    if (new URL(req.url ?? '/', 'http://localhost').pathname !== '/api/memory') {
         return false;
     }
 
     if (req.method === 'GET') {
-        const url = new URL(req.url, 'http://localhost');
+        const url = new URL(req.url ?? '/', 'http://localhost');
         const category = url.searchParams.get('category');
         const text = url.searchParams.get('text')?.trim().toLowerCase();
         const memories = (await loadMemories()).filter((memory) => {
@@ -390,41 +373,35 @@ async function handleMemory(req: IncomingMessage, res: ServerResponse): Promise<
             return true;
         }
 
-        const memory: MemoryRecord = {
-            id: randomUUID(),
-            category: toMemoryCategory(body['category']),
-            content,
-            createdAt: new Date().toISOString(),
+        const memory = await memoryStore.store({
+            category: toMemoryCategory(body['category']), content,
             confidence: Number.isFinite(body['confidence']) ? Number(body['confidence']) : 0.75,
             source: toMemorySource(body['source']),
-        };
-        const memories = await loadMemories();
-        await saveMemories([memory, ...memories]);
+        });
         addLog('info', `Memory added in ${memory.category}.`);
         respondJson(res, 201, { memory });
         return true;
     }
 
-    if (req.method === 'PATCH') {
+    if (req.method === 'PATCH' || req.method === 'DELETE') {
         const body = await parseBody(req);
         const id = typeof body['id'] === 'string' ? body['id'] : '';
-        const content = typeof body['content'] === 'string' ? body['content'].trim() : '';
-        const memories = await loadMemories();
-        const target = memories.find((memory) => memory.id === id);
-        if (!target || !content) {
-            respondJson(res, 400, { error: 'Valid id and content are required.' });
-            return true;
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+            respondJson(res, 400, { error: 'A valid memory UUID is required.' }); return true;
         }
-
-        target.content = content;
-        target.category = toMemoryCategory(body['category']);
-        target.source = toMemorySource(body['source']);
-        target.confidence = Number.isFinite(body['confidence']) ? Number(body['confidence']) : target.confidence;
-        target.lastUsedAt = new Date().toISOString();
-        await saveMemories(memories);
-        addLog('info', `Memory updated in ${target.category}.`);
-        respondJson(res, 200, { memory: target });
-        return true;
+        if (req.method === 'DELETE') {
+            const deleted = await memoryStore.delete(id);
+            if (deleted) addLog('info', 'Memory deleted by user.');
+            respondJson(res, deleted ? 200 : 404, deleted ? { deleted } : { error: 'Memory not found.' }); return true;
+        }
+        const content = typeof body['content'] === 'string' ? body['content'].trim() : '';
+        if (!content) { respondJson(res, 400, { error: 'Memory content is required.' }); return true; }
+        const memory = await memoryStore.update(id, {
+            content, category: toMemoryCategory(body['category']), source: toMemorySource(body['source']),
+            confidence: Number.isFinite(body['confidence']) ? Number(body['confidence']) : 0.75,
+        });
+        if (memory) addLog('info', `Memory updated in ${memory.category}.`);
+        respondJson(res, memory ? 200 : 404, memory ? { memory } : { error: 'Memory not found.' }); return true;
     }
 
     respondJson(res, 405, { error: 'Method not allowed.' });
@@ -509,7 +486,7 @@ async function handleVision(req: IncomingMessage, res: ServerResponse): Promise<
     if (req.url === '/api/vision/capture' && req.method === 'POST') {
         try {
             await ensureInitialized();
-            const image = await app.captureVision();
+            const image = await app.captureVision(requestConsent(req));
             latestVision = image
                 ? { image, capturedAt: new Date().toISOString(), source: OBS_SOURCE_LABEL, status: 'Captured latest OBS/screen context.' }
                 : { source: OBS_SOURCE_LABEL, status: `OBS capture unavailable. Check OBS WebSocket and OBS_SOURCE_NAME (currently "${OBS_SOURCE_NAME}").` };
@@ -578,7 +555,19 @@ async function handleCompanionProfile(req: IncomingMessage, res: ServerResponse)
     return true;
 }
 
+function requestConsent(req: IncomingMessage) {
+    const header = req.headers['x-companion-consent'];
+    return parseConsent(typeof header === 'string' ? JSON.parse(header) : undefined);
+}
+
 async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+    const consent = requestConsent(req);
+    const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+    if (path === '/api/memory') requireConsent(consent.memory, 'Memory consent is required.');
+    if (path === '/api/vision' || path === '/api/vision/capture') requireConsent(consent.screen, 'Screen consent is required.');
+    if (path === '/api/transcribe') requireConsent(consent.microphone, 'Microphone consent is required.');
+    if (['/api/message', '/api/transcribe', '/api/voice/test'].includes(path)) requireCloudConsent(consent);
+
     if (await handleCompanionProfile(req, res)) {
         return true;
     }
@@ -604,7 +593,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
     if (req.url === '/api/voice/test' && req.method === 'POST') {
         try {
             await ensureInitialized();
-            const result = await app.generateVoiceTest();
+            const result = await app.generateVoiceTest(consent);
             const message = 'Voice test generated.';
             addLog('info', `${message}${result.retriedWithoutPrompt ? ' Retry without prompt was used.' : ''}`);
             respondJson(res, 200, { success: true, message, audioUrl: result.audioUrl });
@@ -645,7 +634,6 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
 
     if (req.url === '/api/message' && req.method === 'POST') {
         try {
-            await ensureInitialized();
             const body = await parseBody(req);
             const legacyPrompt = typeof body['prompt'] === 'string' ? body['prompt'].trim() : '';
             const message = typeof body['message'] === 'string' ? body['message'].trim() : '';
@@ -654,20 +642,22 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
             const requestScreenContext = body['useScreenContext'] === true || body['captureScreen'] === true;
             const modeInput = optionalString(body['mode']) ?? optionalString(body['companionMode']);
             const mode = toCompanionMode(modeInput);
-            const companionProfile = isGeneratedCompanionProfile(body['companionProfile'])
-                ? body['companionProfile']
-                : await getCurrentGeneratedProfile();
+            const companionProfile = await getCurrentGeneratedProfile();
 
             if (!prompt && !image) {
                 respondJson(res, 400, { error: 'Prompt or image is required.' });
                 return true;
             }
 
-            const result = await app.interact(prompt, 'text', image, mode, companionProfile, requestScreenContext);
+            requireConsent(!image || consent.camera, 'Camera/visual consent is required for uploaded images.');
+            requireConsent(!requestScreenContext || consent.screen, 'Screen consent is required.');
+            await ensureInitialized();
+            const result = await app.interact(prompt, 'text', image, mode, companionProfile, requestScreenContext, consent);
             addLog(result.success ? 'info' : 'warn', `Chat interaction ${result.success ? 'completed' : 'failed'} in ${mode} mode.`);
             respondJson(res, 200, { ...result, mode });
             return true;
         } catch (error) {
+            if (error instanceof ConsentError) { respondJson(res, 403, { error: error.message }); return true; }
             console.error('Failed to process API message:', error);
             addLog('error', 'Chat interaction failed.');
             respondJson(res, 500, { error: 'Failed to process the message.' });
@@ -719,7 +709,9 @@ async function listenWithPortFallback(server: Server, preferredPort: number): Pr
         try {
             await listenOnPort(server, port);
             const fallbackNote = port === preferredPort ? '' : ` (preferred port ${preferredPort} was busy)`;
-            const message = `Gepetto CompanionOS dashboard available at http://localhost:${port}${fallbackNote}`;
+            const address = server.address();
+            const actualPort = typeof address === 'object' && address ? address.port : port;
+            const message = `Gepetto CompanionOS dashboard available at http://localhost:${actualPort}${fallbackNote}`;
             addLog(port === preferredPort ? 'info' : 'warn', message);
             console.log(`🌐 ${message}`);
             return;
@@ -736,12 +728,14 @@ async function listenWithPortFallback(server: Server, preferredPort: number): Pr
 
 async function main(): Promise<void> {
     const server = createServer(async (req, res) => {
-        const wasApiHandled = await handleApi(req, res);
-        if (wasApiHandled) {
-            return;
+        try {
+            const wasApiHandled = await handleApi(req, res);
+            if (wasApiHandled) return;
+            await serveStatic(req, res);
+        } catch (error) {
+            const status = error instanceof ConsentError ? 403 : error instanceof SyntaxError ? 400 : 500;
+            respondJson(res, status, { error: error instanceof ConsentError ? error.message : status === 400 ? 'Malformed JSON.' : 'Request failed.' });
         }
-
-        await serveStatic(req, res);
     });
 
     process.on('SIGINT', async () => {

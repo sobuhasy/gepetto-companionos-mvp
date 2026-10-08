@@ -30,7 +30,7 @@ YC-safe positioning:
 
 ## Generated Companion Identity
 
-The current runtime uses a local generated companion identity engine. Each user gets one persistent companion profile, and the public modes change behavior rather than replacing the companion's identity.
+The current runtime uses a local generated companion identity engine. The local demo keeps one persistent companion profile, and the public modes change behavior rather than replacing the companion's identity.
 
 The profile includes a generated name, origin district, affinity, familiar motif, personality seed, language support, memory style, voice style, daily workflows, and safety boundary. Aerilonian and Dimension-7-Lyra are lore flavor for the product experience; the companion should not claim literal real-world sentience.
 
@@ -106,3 +106,29 @@ The Signal Demo does not require a Pico. Keep `ROBOT_BODY_BACKEND=vtube` unless 
 ### TypeCast 422 Validation Error
 
 A valid TypeCast API key can still receive HTTP 422 when the request payload does not match the selected voice or model. Check that `COMPANION_VOICE_ID` supports `TYPECAST_MODEL`, and reduce `TYPECAST_MAX_CHARS` if needed. Set `TYPECAST_EMOTION_TYPE=""` or `TYPECAST_EMOTION_TYPE="off"` to omit the prompt object; the runtime also retries one validation failure without the prompt automatically. If TypeCast still rejects the request, CompanionOS continues in text-only mode and keeps the full answer visible in the browser.
+
+
+## Signal architecture and enforced consent
+
+This MVP is a single-user local server with one saved companion profile per checkout, not a multi-user identity service. Chat uses that saved profile; modes only select behavior. Explicit profile generation/editing remains available in the dashboard. Face and Vessel remain roadmap items.
+
+The browser sends typed consent in the `X-Companion-Consent` JSON header on API requests. Missing fields default to false; localFirst defaults to true. Protected operations return HTTP 403 without permission. Enable Memory to view, explicitly create/edit/delete, and use saved memories in chat. Enable Screen for OBS capture or reading the session preview. Enable Camera / uploaded image consent for image attachments (there is no live camera capture feature). Enable Microphone for recording/transcription. Consent revocation stops browser recording and clears local image/vision previews; it does not cancel an already dispatched request or erase stored memories.
+
+Local-first mode blocks cloud chat, transcription and voice generation. No local LLM is implemented. **For the cloud demo, explicitly disable Local-first in Privacy Center**, then opt into the inputs you want to use. The CLI asks permission for cloud chat/voice at startup; selecting microphone input authorizes that recording. CLI screen and memory remain off. `AUTO_CAPTURE_OBS` can trigger chat capture only when screen consent is true, including web requests; it cannot override false consent.
+
+`AetherialApp` depends on the small `LlmProvider` lifecycle/generate interface; `LlmOpenAI` is its only implementation. Identity, modes, and memory context are prepared outside the provider. OpenAI transcription and TypeCast TTS remain separate capabilities.
+
+`JsonLongTermMemory` owns the existing JSONL file and explicit CRUD. In-process mutations are serialized and replaced atomically. Conversation retrieval ranks the most recent 50 records by distinct message-token overlap, breaking ties by recency, and includes at most 5 contents of 400 characters each. The prompt contains content only, with no memory IDs or storage metadata, and treats memories as background data rather than instructions. No conversation automatically creates memories. Disabling memory consent prevents reads and injection; it does not delete records. DELETE `/api/memory` accepts a JSON `{ "id": "memory UUID" }`, returning 400 for malformed IDs and 404 for missing records. Create/update/delete produce session event-log entries without memory content.
+
+`source/body/AvatarState.ts` defines renderer-independent activity (`idle`, `listening`, `thinking`, `speaking`) and the existing emotions. `RobotBody.setStatusLight` already accepts that activity contract; `setExpression` supplies emotion through the existing VTube/Pico adapters. A future pre-rendered-loop adapter can consume these semantics at the body boundary without owning identity, prompts or memory. This is a contract and extension point only: no Face renderer or new activity orchestration is implemented, and VTube expression/lip-sync routing is preserved.
+
+Verification:
+
+```sh
+npm run build
+node --test tests/p0.test.cjs
+node --check source/web/public/app.js
+npm run start:web
+```
+
+Review limits: the server has no authentication or per-user authorization and should be used as a trusted local demo, not exposed as a hosted service. Consent is a per-request client declaration, not a durable permission grant. JSONL reads still load the file, ranking is lexical, and writes are serialized only within one process. Memory text can carry prompt injection; instructions reduce risk but cannot guarantee model compliance. OBS previews remain in server session memory, and revocation does not retract data already sent to a provider.

@@ -1,3 +1,9 @@
+import type { AvatarEmotion } from '../body/AvatarState';
+import type { LlmProvider } from '../module/LlmProvider';
+import { DEFAULT_CONSENT, requireConsent, requireCloudConsent } from '../privacy/ConsentState';
+import type { ConsentState } from '../privacy/ConsentState';
+import { JsonLongTermMemory } from '../ltm/JsonLongTermMemory';
+import { buildMemoryContext } from '../companion/MemoryContext';
 import { LlmOpenAI } from "../module/LlmOpenAI";
 import { getSafeTypeCastErrorMessage, TtsTypeCast } from "../tts/TtsTypeCast";
 import type { TypeCastGenerationResult } from "../tts/TtsTypeCast";
@@ -19,7 +25,7 @@ export type AetherialReply = {
     emotion?: string;
 };
 
-type EveEmotion = 'neutral' | 'love' | 'angry' | 'sad' | 'amazed' | 'sleepy' | 'nervous';
+type EveEmotion = AvatarEmotion;
 
 type EveResponse = {
     text: string;
@@ -296,7 +302,10 @@ function toBodyBackend(value: unknown): BodyBackend {
 }
 
 export class AetherialApp {
-    private eveBrain?: LlmOpenAI;
+    private eveBrain?: LlmProvider;
+    private readonly memory = new JsonLongTermMemory();
+
+    constructor(private readonly modelFactory: () => LlmProvider = () => new LlmOpenAI()) {}
     private eveVoice?: TtsTypeCast;
     private eveVoiceBackup?: TtsCoqui;
     private eveEars?: MicWhisper;
@@ -310,7 +319,7 @@ export class AetherialApp {
             return;
         }
 
-        this.eveBrain = new LlmOpenAI();
+        this.eveBrain = this.modelFactory();
         this.eveVoice = new TtsTypeCast();
         this.eveVoiceBackup = new TtsCoqui();
         this.eveEars = new MicWhisper();
@@ -331,14 +340,20 @@ export class AetherialApp {
         this.initialized = true;
     }
 
-    async getPromptFromSpeech(): Promise<string> {
+    async getPromptFromSpeech(consent: ConsentState = DEFAULT_CONSENT): Promise<string> {
+        requireConsent(consent.microphone, "Microphone consent is required.");
+        requireCloudConsent(consent);
         return this.requireEars().listenAndTranscribe();
     }
 
-    async interact(userPrompt: string, mode: InteractionMode = 'text', uploadedImage?: string, companionModeInput?: unknown, generatedProfile?: GeneratedCompanionProfile, requestScreenContext = false): Promise<AetherialReply> {
+    async interact(userPrompt: string, mode: InteractionMode = 'text', uploadedImage?: string, companionModeInput?: unknown, generatedProfile?: GeneratedCompanionProfile, requestScreenContext = false, consent: ConsentState = DEFAULT_CONSENT): Promise<AetherialReply> {
         if (!this.initialized) {
             throw new Error('AetherialApp not initialized');
         }
+
+        requireCloudConsent(consent);
+        requireConsent(!uploadedImage || consent.camera, 'Camera/visual consent is required for uploaded images.');
+        requireConsent(!requestScreenContext || consent.screen, 'Screen consent is required.');
 
         if (userPrompt.toLowerCase().includes('exit')) {
             return {
@@ -349,7 +364,7 @@ export class AetherialApp {
 
         let finalImage = uploadedImage;
 
-        const shouldCaptureScreen = requestScreenContext || isEnabled(process.env["AUTO_CAPTURE_OBS"]);
+        const shouldCaptureScreen = consent.screen && (requestScreenContext || isEnabled(process.env["AUTO_CAPTURE_OBS"]));
 
         if (!finalImage && shouldCaptureScreen) {
             finalImage = await this.requireEyes().captureScreen();
@@ -366,6 +381,7 @@ export class AetherialApp {
             mode: companionMode,
             userMessage: userPrompt,
             hasImage: Boolean(finalImage),
+            context: await buildMemoryContext(this.memory, consent, userPrompt),
         };
         const routedPrompt = await this.companionPrompts.buildPrompt(
             generatedProfile ? { ...promptInput, profile: generatedProfile } : promptInput,
@@ -404,7 +420,8 @@ export class AetherialApp {
         return spokenText ? { ...reply, spokenText } : reply;
     }
 
-    async captureVision(): Promise<string | undefined> {
+    async captureVision(consent: ConsentState = DEFAULT_CONSENT): Promise<string | undefined> {
+        requireConsent(consent.screen, "Screen consent is required.");
         if (!this.initialized) {
             throw new Error('AetherialApp not initialized');
         }
@@ -412,7 +429,8 @@ export class AetherialApp {
         return this.requireEyes().captureScreen();
     }
 
-    async generateVoiceTest(): Promise<TypeCastGenerationResult> {
+    async generateVoiceTest(consent: ConsentState = DEFAULT_CONSENT): Promise<TypeCastGenerationResult> {
+        requireCloudConsent(consent);
         if (!this.initialized) {
             throw new Error('AetherialApp not initialized');
         }
@@ -503,7 +521,7 @@ export class AetherialApp {
             : cleaned;
     }
 
-    private requireBrain(): LlmOpenAI {
+    private requireBrain(): LlmProvider {
         if (!this.eveBrain) throw new Error('LlmOpenAI not initialized');
         return this.eveBrain;
     }

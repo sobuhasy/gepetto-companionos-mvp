@@ -30,5 +30,7 @@ export type MemoryQuery = {
 
 export interface LTM extends Module {
     store(record: Omit<MemoryRecord, "id" | "createdAt">): Promise<MemoryRecord>;
+    update(id: string, patch: Pick<MemoryRecord, 'content' | 'category' | 'source' | 'confidence'>): Promise<MemoryRecord | undefined>;
+    delete(id: string): Promise<boolean>;
     query(options?: MemoryQuery): Promise<MemoryRecord[]>;
 }

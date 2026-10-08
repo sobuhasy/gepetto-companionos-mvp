@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -29,6 +29,43 @@ export class JsonLongTermMemory implements LTM {
         // No persistent connection to close for JSONL storage.
     }
 
+    private writes: Promise<unknown> = Promise.resolve();
+
+    private mutate<T>(operation: () => Promise<T>): Promise<T> {
+        const next = this.writes.then(operation);
+        this.writes = next.catch(() => undefined);
+        return next;
+    }
+
+    private async saveAll(records: MemoryRecord[]): Promise<void> {
+        await this.init();
+        const temporary = `${this.memoryPath}.tmp`;
+        await writeFile(temporary, records.map(record => JSON.stringify(record) + '\n').join(''), 'utf-8');
+        await rename(temporary, this.memoryPath);
+    }
+
+    public async update(id: string, patch: Pick<MemoryRecord, 'content' | 'category' | 'source' | 'confidence'>): Promise<MemoryRecord | undefined> {
+        return this.mutate(async () => {
+            const records = await this.loadAll();
+            const target = records.find(record => record.id === id);
+            if (!target) return undefined;
+            if (!patch.content.trim()) throw new Error('Memory content is required.');
+            Object.assign(target, patch, { content: patch.content.trim(), confidence: this.normalizeConfidence(patch.confidence) });
+            await this.saveAll(records);
+            return target;
+        });
+    }
+
+    public async delete(id: string): Promise<boolean> {
+        return this.mutate(async () => {
+            const records = await this.loadAll();
+            const remaining = records.filter(record => record.id !== id);
+            if (remaining.length === records.length) return false;
+            await this.saveAll(remaining);
+            return true;
+        });
+    }
+
     public async store(record: Omit<MemoryRecord, "id" | "createdAt">): Promise<MemoryRecord> {
         await this.init();
 
@@ -48,7 +85,7 @@ export class JsonLongTermMemory implements LTM {
             throw new Error("Cannot store an empty memory record.");
         }
 
-        await appendFile(this.memoryPath, `${JSON.stringify(memory)}\n`, "utf-8");
+        await this.mutate(async () => { await this.saveAll([...(await this.loadAll()), memory]); });
 
         return memory;
     }
