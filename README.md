@@ -1,6 +1,22 @@
-# Gepetto CompanionOS MVP
+# Aetherial-Eve — Multimodal Desktop AI Assistant
 
-Gepetto CompanionOS is a privacy-first multimodal AI companion workspace for the July 12 Signal Demo. The MVP focuses on a browser dashboard with chat, voice controls, user-owned memory, tasks, focused modes, and consent-based screen context.
+Aetherial-Eve is a TypeScript/Node.js system integrating LLM interaction, speech-to-text, text-to-speech, OBS WebSocket screen capture, VTube Studio expression control, serial-device communication, and a browser-based interface. The project focuses on modular integration, multimodal interaction, and deployment-oriented prototyping.
+
+The current application is presented as the **Gepetto CompanionOS MVP**, a privacy-first workspace developed for the July 12 Signal Demo. Its browser dashboard combines chat, voice controls, user-owned memory, tasks, focused modes, and consent-based screen context.
+
+## Engineering Scope
+
+- **Language and interaction:** OpenAI-backed LLM integration with mode-aware prompts and persistent, user-controlled companion profiles.
+- **Audio:** microphone capture for speech-to-text plus cloud and local text-to-speech adapters.
+- **Visual context:** user-initiated image uploads and consent-based OBS WebSocket screen capture.
+- **Expression and hardware:** VTube Studio expression control and optional serial communication with a Raspberry Pi Pico.
+- **Interface and deployment:** a browser dashboard, a CLI runtime, environment-based configuration, and selectable hardware backends.
+
+## Security and Control Boundaries
+
+This repository is a research prototype, not a system administration or endpoint-control product. Screen context is captured only through an explicit user action, saved memories can be reviewed or deleted, and potentially destructive OpenClaw operations require confirmation. Physical serial control is optional and disabled by the default `vtube` backend.
+
+Legacy experimental modules are retained for provenance but are not part of the default dashboard startup path. Review and isolate optional integrations before enabling them, use least-privilege credentials, and never commit secrets from `.env`.
 
 ## Collaborator Demo Script
 
