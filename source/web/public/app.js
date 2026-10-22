@@ -44,6 +44,41 @@ const presenceVoice = document.getElementById('presence-voice');
 const presenceMemory = document.getElementById('presence-memory');
 const presencePrivacy = document.getElementById('presence-privacy');
 const modeAdaptationText = document.getElementById('mode-adaptation-text');
+const conversationStatus = document.getElementById('conversation-status');
+const connectionStatus = document.getElementById('connection-status');
+const latestButton = document.getElementById('jump-to-latest');
+let followConversation = true;
+let conversationError = false;
+
+function showConversationStatus(message, activity = 'idle') {
+  conversationStatus.textContent = message;
+  conversationStatus.dataset.activity = activity;
+}
+
+function showChatError(message) {
+  conversationError = true;
+  showConversationStatus(message, 'error');
+  addMessage('companion', message);
+}
+
+function showConnection(connected) {
+  connectionStatus.textContent = connected ? 'Online' : 'Reconnecting';
+  connectionStatus.dataset.status = connected ? 'online' : 'offline';
+}
+
+function scrollToLatest() {
+  followConversation = true;
+  chat.scrollTop = chat.scrollHeight;
+  latestButton.classList.add('hidden');
+}
+
+chat.addEventListener('scroll', () => {
+  followConversation = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 48;
+  if (followConversation) latestButton.classList.add('hidden');
+});
+latestButton.addEventListener('click', scrollToLatest);
+window.addEventListener('resize', () => { if (followConversation) scrollToLatest(); });
+document.getElementById('image-upload-button').addEventListener('click', () => imageUpload.click());
 
 const companionProfileStorageKey = 'gepetto-generated-companion-profile';
 const modeConfigs = {
@@ -168,6 +203,7 @@ function setMicState(recording) {
 
   micButton.classList.toggle('recording', recording);
   micButton.title = recording ? 'Stop recording' : 'Start microphone input';
+  micButton.setAttribute('aria-label', micButton.title);
   micButton.setAttribute('aria-pressed', recording ? 'true' : 'false');
 }
 
@@ -181,19 +217,21 @@ function statusClass(status) {
   return 'bad';
 }
 
-function addMessage(role, text, imageUrl = null) {
+function addMessage(role, text, imageUrl = null, senderLabel = null) {
   const container = document.createElement('div');
   container.className = `message-container ${role}`;
 
   const avatar = document.createElement('div');
   avatar.className = `avatar ${role}`;
+  avatar.setAttribute('aria-hidden', 'true');
+  avatar.textContent = role === 'companion' ? '✧' : 'Y';
 
   const wrapper = document.createElement('div');
   wrapper.className = 'message-wrapper';
 
   const nameLabel = document.createElement('div');
   nameLabel.className = 'sender-name';
-  nameLabel.textContent = role === 'companion' ? (presenceName?.textContent || 'Your companion') : 'You';
+  nameLabel.textContent = senderLabel || (role === 'companion' ? (presenceName?.textContent || 'Your companion') : 'You');
 
   const bubble = document.createElement('article');
   bubble.className = `message ${role}`;
@@ -203,6 +241,7 @@ function addMessage(role, text, imageUrl = null) {
     img.src = imageUrl;
     img.alt = 'Uploaded context';
     img.className = 'message-image';
+    img.addEventListener('load', () => { if (followConversation) scrollToLatest(); });
     bubble.appendChild(img);
   }
 
@@ -216,7 +255,8 @@ function addMessage(role, text, imageUrl = null) {
   container.appendChild(wrapper);
 
   chat.appendChild(container);
-  chat.scrollTop = chat.scrollHeight;
+  if (followConversation || role === 'user') scrollToLatest();
+  else latestButton.classList.remove('hidden');
 }
 
 function getConsent() {
@@ -255,6 +295,7 @@ const nativeRenderer = new NativeLive2DRenderer(document.getElementById('live2d-
     if (status === 'ready' && missingParameters.length) {
       avatarRenderStatus.textContent += ` Rig controls not found: ${missingParameters.join(', ')}. Customize parameter names if needed.`;
     }
+    document.getElementById('avatar-rig-status').textContent = avatarRenderStatus.textContent;
   },
 });
 const avatarMedia = new AvatarMediaSession(body => fetchJson('/api/avatar', {
@@ -264,6 +305,10 @@ const avatarMedia = new AvatarMediaSession(body => fetchJson('/api/avatar', {
     ++avatarStateVersion;
     nativeRenderer.setState(avatar);
     avatarStateLabel.textContent = `${avatar.activity} · ${avatar.emotion}`;
+    if (!conversationError) {
+      const feedback = { idle: 'Ready when you are', listening: 'Listening… tap the microphone to finish', thinking: isTranscribing ? 'Transcribing your voice…' : 'Thinking…', speaking: 'Speaking… you can interrupt at any time' };
+      showConversationStatus(feedback[avatar.activity] || feedback.idle, avatar.activity);
+    }
   },
   onMouth: level => nativeRenderer.setMouth(level),
 });
@@ -330,17 +375,16 @@ const avatarPollTimer = setInterval(async () => {
   const version = avatarStateVersion;
   try {
     const payload = await fetchJson('/api/avatar');
+    showConnection(true);
     if (!avatarPageClosed && version === avatarStateVersion) observeAvatarState(payload.avatar);
-  } catch { nativeRenderer.setMouth(0); }
+  } catch { nativeRenderer.setMouth(0); showConnection(false); }
   finally { avatarPolling = false; }
 }, 1000);
-const stopVoiceButton = document.createElement('button');
-stopVoiceButton.type = 'button';
-stopVoiceButton.className = 'secondary-btn';
-stopVoiceButton.textContent = 'Interrupt voice';
-autoPlayToggle.parentElement.appendChild(stopVoiceButton);
+const stopVoiceButton = document.getElementById('interrupt-voice');
 stopVoiceButton.addEventListener('click', () => {
   recordingCancelled = true;
+  conversationError = false;
+  showConversationStatus('Voice interrupted');
   if (isRecording && mediaRecorder) mediaRecorder.stop();
   avatarMedia.cancel().catch(() => {});
 });
@@ -390,15 +434,17 @@ async function toggleRecording() {
   }
 
   if (!getConsent().microphone || getConsent().localFirst) {
-    addMessage('companion', 'Enable microphone consent and disable local-first mode for cloud transcription.'); return;
+    showChatError('Enable microphone consent and disable local-first mode in Privacy & Permissions for cloud transcription.'); return;
   }
   if (!navigator.mediaDevices?.getUserMedia) {
-    addMessage('companion', 'Microphone input is not supported in this browser.');
+    showChatError('Microphone input is not supported in this browser.');
     return;
   }
 
   let microphoneStream;
   try {
+    conversationError = false;
+    showConversationStatus('Opening microphone…', 'listening');
     await avatarMedia.cancel();
     microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const stream = microphoneStream;
@@ -416,6 +462,7 @@ async function toggleRecording() {
       stream.getTracks().forEach(track => track.stop());
       setMicState(false);
       avatarMedia.cancel().catch(() => {});
+      showChatError('Microphone recording failed. Please try again.');
     });
     let recordingSession;
     let recordingId;
@@ -436,6 +483,7 @@ async function toggleRecording() {
 
       try {
         isTranscribing = true;
+        showConversationStatus('Transcribing your voice…', 'thinking');
         setControlsDisabled(true);
         recordingId = await recordingSession;
         if (avatarMedia.id !== recordingId) return;
@@ -444,7 +492,7 @@ async function toggleRecording() {
         if (avatarMedia.id !== recordingId) return;
 
         if (!transcript) {
-          addMessage('companion', 'I listened carefully, but I could not hear any clear words.');
+          showChatError('I could not hear any clear words. Please try again.');
           return;
         }
 
@@ -453,7 +501,7 @@ async function toggleRecording() {
         recordedInteractionId = recordingId;
         promptInput.focus();
       } catch (error) {
-        addMessage('companion', `Microphone transcription failed: ${error.message}`);
+        showChatError(`Microphone transcription failed: ${error.message}`);
       } finally {
         isTranscribing = false;
         setControlsDisabled(false);
@@ -467,7 +515,7 @@ async function toggleRecording() {
   } catch (error) {
     microphoneStream?.getTracks().forEach(track => track.stop());
     await avatarMedia.cancel().catch(() => {});
-    addMessage('companion', `Microphone access failed: ${error.message}`);
+    showChatError(`Microphone access failed: ${error.message}`);
     setMicState(false);
   }
 }
@@ -475,6 +523,7 @@ async function toggleRecording() {
 async function loadSystemStatus() {
   const version = avatarStateVersion;
   const payload = await fetchJson('/api/status');
+  showConnection(true);
   if (!avatarPageClosed && version === avatarStateVersion) observeAvatarState(payload.avatar);
   const readyText = payload.ready ? 'Runtime ready' : 'Runtime warms on first chat';
   runtimePill.textContent = readyText;
@@ -590,7 +639,7 @@ async function loadTasks() {
 }
 
 imageUpload.addEventListener('change', (e) => {
-  if (!getConsent().camera) { imageUpload.value = ''; addMessage('companion', 'Enable camera/visual consent to attach an image.'); return; }
+  if (!getConsent().camera) { imageUpload.value = ''; showChatError('Enable camera / uploaded image consent in Privacy & Permissions to attach an image.'); return; }
   const file = e.target.files[0];
   if (file) {
     const reader = new FileReader();
@@ -611,9 +660,9 @@ removeImageBtn.addEventListener('click', () => {
 });
 
 promptInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
     event.preventDefault();
-    form.requestSubmit();
+    if (!sendButton.disabled) form.requestSubmit();
   }
 });
 
@@ -624,6 +673,7 @@ if (micButton) {
 sttReadyToggle.addEventListener('change', () => setControlsDisabled(false));
 voiceTestButton.addEventListener('click', async () => {
   voiceTestButton.disabled = true;
+  conversationError = false;
   avatarResponsePending = true;
   let interactionId;
   try {
@@ -641,7 +691,7 @@ voiceTestButton.addEventListener('click', async () => {
     addMessage('companion', payload.message ?? 'Voice test generated.');
   } catch (error) {
     if (interactionId) await avatarMedia.finish('error', interactionId).catch(() => {});
-    addMessage('companion', `Voice test failed: ${error.message}`);
+    showChatError(`Voice test failed: ${error.message}`);
   } finally {
     avatarResponsePending = false;
     voiceTestButton.disabled = false;
@@ -705,8 +755,8 @@ document.querySelectorAll('.mode-btn').forEach((button) => {
     const nextMode = button.dataset.mode || 'productivity';
     setActiveMode(nextMode);
     promptInput.value = modeConfigs[nextMode]?.starter || button.dataset.prompt || '';
+    window.companionWorkspace?.closeSettings();
     promptInput.focus();
-    document.getElementById('chat').scrollIntoView({ behavior: 'smooth' });
   });
 });
 
@@ -716,6 +766,7 @@ companionMode.addEventListener('change', () => {
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (sendButton.disabled) return;
 
   if (isRecording && mediaRecorder) {
     mediaRecorder.stop();
@@ -730,6 +781,8 @@ form.addEventListener('submit', async (event) => {
   addMessage('user', message, currentImageBase64);
 
   const imageToSend = currentImageBase64;
+  conversationError = false;
+  showConversationStatus('Thinking…', 'thinking');
   promptInput.value = '';
   currentImageBase64 = null;
   imagePreviewContainer.classList.add('hidden');
@@ -758,7 +811,7 @@ form.addEventListener('submit', async (event) => {
     if (payload.avatar) avatarMedia.observe(payload.avatar);
     if (autoPlayToggle.checked && payload.spokenText && payload.audioUrl) {
       if (!(await avatarMedia.play(`${payload.audioUrl}?t=${Date.now()}`))) {
-        addMessage('companion', 'I answered, but audio playback failed. Check voice output routing.');
+        showChatError('I answered, but audio playback failed. Check voice output routing.');
       }
     } else {
       await avatarMedia.finish('ended', interactionId);
@@ -768,11 +821,11 @@ form.addEventListener('submit', async (event) => {
     await loadSystemStatus();
   } catch (error) {
     if (interactionId) await avatarMedia.finish('error', interactionId).catch(() => {});
-    addMessage('companion', `Network error: ${error.message}`);
+    showChatError(`Could not send your message: ${error.message}`);
   } finally {
     avatarResponsePending = false;
     setControlsDisabled(false);
-    promptInput.focus();
+    if (!document.getElementById('settings-drawer').open) promptInput.focus();
   }
 });
 
@@ -845,6 +898,7 @@ function renderProfile(profile) {
   document.getElementById('profile-voice').textContent = safeProfile.voiceStyle || fallbackCompanionProfile.voiceStyle;
   document.getElementById('profile-workflows').textContent = workflowList(safeProfile.dailyWorkflows);
   if (presenceName) presenceName.textContent = publicCompanionName(safeProfile, true);
+  document.getElementById('stage-companion-name').textContent = publicCompanionName(safeProfile, true);
   if (presenceVoice) presenceVoice.textContent = safeProfile.voiceStyle || 'Ready with consent';
   if (presenceMemory) presenceMemory.textContent = 'User-owned memory';
   if (profileNativeLanguageInput && !profileNativeLanguageInput.value) {
@@ -1001,10 +1055,11 @@ loadCompanionProfile().catch((error) => {
   renderProfile(companionProfile || fallbackCompanionProfile);
 });
 loadPrivacyControls();
-addMessage('companion', 'Gepetto CompanionOS Signal Demo is online. Choose a mode, start a task, or save a user-owned memory.');
+addMessage('companion', 'I’m here with you. What would you like to work on today?', null, 'Your companion');
 loadSystemStatus().catch((error) => {
   runtimePill.textContent = error.message;
   runtimePill.className = 'status-pill bad';
+  showConnection(false);
 });
 loadVision().catch(() => undefined);
 loadMemory().catch((error) => {

@@ -2,7 +2,7 @@
 
 Aetherial-Eve is a TypeScript/Node.js system integrating LLM interaction, speech-to-text, text-to-speech, OBS WebSocket screen capture, VTube Studio expression control, serial-device communication, and a browser-based interface. The project focuses on modular integration, multimodal interaction, and deployment-oriented prototyping.
 
-The current application is presented as the **Gepetto CompanionOS MVP**, a privacy-first workspace developed for the July 12 Signal Demo. Its browser dashboard combines chat, voice controls, user-owned memory, tasks, focused modes, and consent-based screen context.
+The current application is presented as the **Gepetto CompanionOS MVP**, a privacy-first workspace developed for the July 12 Signal Demo. Its browser workspace opens directly into a large animated Live2D companion and conversation, with voice, user-owned memory, tasks, focused modes, and consent-based screen context.
 
 ## Engineering Scope
 
@@ -24,8 +24,8 @@ Gepetto CompanionOS is a privacy-first AI companion workspace that gives users o
 
 Demo flow:
 
-1. Start on the dashboard hero and explain that Signal is the current MVP: chat, voice, memory, tasks, modes, and consent-based context.
-2. Show the companion identity panel and emphasize that modes change behavior without replacing the companion.
+1. Start in the companion workspace with the Live2D avatar, conversation, and message composer visible together.
+2. Open the top-right settings menu and show Companion Identity. Modes change behavior without replacing the companion.
 3. Switch through Study, Code, Productivity, Japanese, Creative, and Support modes to show one companion adapting to different workflows.
 4. Send a short chat prompt, then point out voice controls, microphone consent, and screen-context capture as opt-in surfaces.
 5. Open memory, tasks, privacy, and the Signal -> Face -> Vessel roadmap to clarify what is live now and what is later.
@@ -102,6 +102,10 @@ The dashboard tries `http://localhost:3000` first. If that port is already in us
 ```sh
 PORT=3001 npm run start:web
 ```
+
+The workspace uses a desktop split view and a compact stacked layout on phones. The top bar selects the working mode; the settings drawer contains identity generation, appearance and voice, tasks, memory, screen context, privacy, system health, and the roadmap. Opening settings keeps the conversation, loaded model, and active playback running. Escape closes the drawer and restores focus. Enter sends a message, Shift+Enter adds a line, and the square composer button interrupts voice. When reading earlier messages, use **New messages** to return to the latest reply.
+
+Privacy defaults remain local-first with microphone, images, screen context, and memory disabled until explicitly enabled in **Privacy & Permissions**. Cloud chat, transcription, and voice require disabling local-first mode; the drawer does not grant consent automatically.
 
 `npm start` also launches the web dashboard for MVP convenience. The terminal loop is still available with:
 

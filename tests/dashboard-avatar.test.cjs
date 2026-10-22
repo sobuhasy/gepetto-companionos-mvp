@@ -27,7 +27,21 @@ class Element {
     this.dataset = {};
     this.children = [];
     this.listeners = new Map();
-    this.classList = { add() {}, remove() {}, toggle() {} };
+    const classes = new Set();
+    this.classList = {
+      add: (...names) => names.forEach(name => classes.add(name)),
+      remove: (...names) => names.forEach(name => classes.delete(name)),
+      contains: name => classes.has(name),
+      toggle: (name, force = !classes.has(name)) => {
+        if (force) classes.add(name); else classes.delete(name);
+        return force;
+      },
+    };
+    this.scrollTop = 0;
+    this.scrollHeight = 320;
+    this.clientHeight = 320;
+    this.open = false;
+    this.focusCount = 0;
     this.ownText = '';
   }
   set textContent(value) { this.ownText = String(value); this.children = []; }
@@ -37,17 +51,21 @@ class Element {
     listeners.push(listener); this.listeners.set(event, listeners);
   }
   async fire(event, properties = {}) {
+    const dispatched = {
+      preventDefault() { this.defaultPrevented = true; }, target: this, ...properties,
+    };
     await Promise.all((this.listeners.get(event) || []).map(listener =>
-      listener({ preventDefault() {}, target: this, ...properties })));
+      listener(dispatched)));
+    return dispatched;
   }
   appendChild(child) { this.children.push(child); return child; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; this.ownText = ''; }
   setAttribute() {}
-  focus() {}
+  focus() { ++this.focusCount; }
   scrollIntoView() {}
   click() { return this.fire('click'); }
-  requestSubmit() { return this.fire('submit'); }
+  requestSubmit() { ++this.submissionCount; return this.fire('submit'); }
 }
 
 async function dashboard(t) {
@@ -58,31 +76,45 @@ async function dashboard(t) {
   };
   get('companion-mode').value = 'productivity';
   get('auto-play-toggle').checked = true;
+  get('stt-ready-toggle').checked = true;
+  get('chat-form').submissionCount = 0;
+  get('jump-to-latest').classList.add('hidden');
+  get('image-preview-container').classList.add('hidden');
   get('auto-play-toggle').parentElement = new Element();
   const privacy = ['microphone', 'camera', 'screen', 'memory', 'localFirst'].map(key => {
-    const element = new Element(); element.dataset.privacy = key; return element;
+    const element = new Element(); element.dataset.privacy = key;
+    element.checked = key === 'localFirst';
+    return element;
+  });
+  const modes = ['study', 'code', 'productivity', 'japanese', 'creative', 'support'].map(mode => {
+    const element = new Element(); element.dataset.mode = mode; return element;
   });
   const document = {
     getElementById: get,
     createElement: () => new Element(),
-    querySelectorAll: selector => selector === '[data-privacy]' ? privacy : [],
+    querySelectorAll: selector => selector === '[data-privacy]' ? privacy : selector === '.mode-btn' ? modes : [],
   };
   const window = new Element();
   const storage = new Map();
-  const backend = { profile: profile('Companion A'), nextProfile: profile('Companion B'), avatar: idle(), interaction: 0 };
+  const backend = {
+    profile: profile('Companion A'), nextProfile: profile('Companion B'), avatar: idle(), interaction: 0,
+    tasks: [], memories: [],
+  };
   const presentations = new Map();
   const presentation = id => presentations.get(id) || {
     profileId: id, modelUrl: `/models/${encodeURIComponent(id)}/avatar.model3.json`,
     voiceId: `voice-${id}`, parameterMap: {}, backend: 'native',
   };
   let renderer;
+  const renderers = [];
   class RendererMock {
     models = [];
     states = [];
-    constructor() { renderer = this; }
+    mouths = [];
+    constructor() { renderer = this; renderers.push(this); }
     async loadModel(url, parameters) { this.models.push({ url, parameters }); return true; }
     setState(state) { this.states.push({ ...state }); }
-    setMouth() {}
+    setMouth(level) { this.mouths.push(level); }
     dispose() {}
   }
   class AudioMock extends EventTarget {
@@ -114,7 +146,18 @@ async function dashboard(t) {
     }
     if (pathname === '/api/status') return { ready: true, avatar: { ...backend.avatar }, health: {}, logs: [] };
     if (pathname === '/api/vision') return { image: null };
-    if (pathname === '/api/tasks') return { tasks: [] };
+    if (pathname === '/api/tasks') {
+      if (request.method === 'POST') backend.tasks.push({ id: `task-${backend.tasks.length + 1}`, done: false, ...request.body });
+      if (request.method === 'PATCH') Object.assign(backend.tasks.find(task => task.id === request.body.id), request.body);
+      return { tasks: backend.tasks };
+    }
+    if (pathname === '/api/memory') {
+      if (request.method === 'POST') backend.memories.push({ ...request.body, id: `memory-${backend.memories.length + 1}` });
+      if (request.method === 'PATCH') Object.assign(backend.memories.find(memory => memory.id === request.body.id), request.body);
+      if (request.method === 'DELETE') backend.memories = backend.memories.filter(memory => memory.id !== request.body.id);
+      return { memories: backend.memories, categories: ['user_profile', 'projects'] };
+    }
+    if (pathname === '/api/message') return { responseText: 'Your companion reply.', avatar: { ...backend.avatar } };
     if (pathname === '/api/voice/test') return { success: true, audioUrl: '/voice-test.wav', avatar: { ...backend.avatar } };
     throw new Error(`Unexpected dashboard request: ${request.method} ${pathname}`);
   };
@@ -127,7 +170,7 @@ async function dashboard(t) {
     clearInterval: id => intervals.delete(id),
     fetch: async (url, options = {}) => {
       const request = { url: new URL(url, 'http://localhost'), method: options.method || 'GET',
-        body: options.body ? JSON.parse(options.body) : undefined };
+        body: options.body ? JSON.parse(options.body) : undefined, headers: options.headers };
       requests.push(request);
       const handler = handlers.get(`${request.method} ${request.url.pathname}`);
       const custom = handler ? await handler(request) : undefined;
@@ -142,7 +185,7 @@ async function dashboard(t) {
   t.after(async () => { await window.fire('pagehide'); await settle(); });
   await settle();
   return {
-    get, requests, handlers, backend, presentations, presentation, renderer, audio,
+    get, requests, handlers, backend, presentations, presentation, renderer, renderers, audio, modes, privacy, storage, window,
     poll: async () => {
       for (const timer of [...intervals.values()]) if (timer.delay === 1000) await timer.callback();
     },
@@ -232,4 +275,275 @@ test('settings save snapshots its fields before cancellation and cannot replace 
   assert.equal(h.get('profile-name').textContent, 'Companion B');
   assert.equal(h.get('avatar-model-url').value, h.presentation('Companion B').modelUrl);
   assert.equal(h.get('avatar-voice-id').value, 'voice-Companion B');
+});
+
+test('a reply preserves upward scroll and offers a working jump to latest', async t => {
+  const h = await dashboard(t);
+  const reply = deferred(), received = deferred();
+  h.handlers.set('POST /api/message', () => { received.resolve(); return reply.promise; });
+  const chat = h.get('chat-log');
+  chat.scrollHeight = 1800;
+  chat.clientHeight = 400;
+  h.get('prompt').value = 'I will read an earlier message while you answer.';
+  const submitted = h.get('chat-form').fire('submit');
+  await received.promise;
+  chat.scrollTop = 200;
+  await chat.fire('scroll');
+  chat.scrollHeight = 2100;
+  reply.resolve({ responseText: 'A new reply is available below.', avatar: idle() });
+  await submitted;
+  assert.equal(chat.scrollTop, 200, 'new companion messages must not move a user reading history');
+  assert.equal(h.get('jump-to-latest').classList.contains('hidden'), false);
+  await h.window.fire('resize');
+  assert.equal(chat.scrollTop, 200, 'resizing must also preserve intentional upward scroll');
+  await h.get('jump-to-latest').click();
+  assert.equal(chat.scrollTop, chat.scrollHeight);
+  assert.equal(h.get('jump-to-latest').classList.contains('hidden'), true);
+});
+
+test('sending a message resumes following the latest conversation from an upward scroll', async t => {
+  const h = await dashboard(t);
+  const chat = h.get('chat-log');
+  chat.scrollHeight = 1900;
+  chat.clientHeight = 400;
+  chat.scrollTop = 150;
+  await chat.fire('scroll');
+  h.get('prompt').value = 'Continue here';
+  await h.get('chat-form').fire('submit');
+  assert.equal(chat.scrollTop, chat.scrollHeight);
+  assert.equal(h.get('jump-to-latest').classList.contains('hidden'), true);
+  assert.equal(h.requests.filter(request => request.url.pathname === '/api/message').length, 1);
+  assert.match(chat.textContent, /Continue here/);
+  assert.match(chat.textContent, /Your companion reply/);
+});
+
+test('Enter submits once while Shift+Enter, composing Enter and disabled send preserve the draft', async t => {
+  const h = await dashboard(t);
+  const prompt = h.get('prompt');
+  prompt.value = 'A multiline\ndraft';
+  for (const properties of [{ shiftKey: true }, { isComposing: true }, { keyCode: 229 }]) {
+    const event = await prompt.fire('keydown', { key: 'Enter', ...properties });
+    assert.equal(event.defaultPrevented, undefined);
+    assert.equal(prompt.value, 'A multiline\ndraft');
+  }
+  assert.equal(h.get('chat-form').submissionCount, 0);
+  h.get('send-button').disabled = true;
+  const blocked = await prompt.fire('keydown', { key: 'Enter' });
+  assert.equal(blocked.defaultPrevented, true);
+  assert.equal(h.get('chat-form').submissionCount, 0);
+  h.get('send-button').disabled = false;
+  const sent = await prompt.fire('keydown', { key: 'Enter' });
+  await settle();
+  assert.equal(sent.defaultPrevented, true);
+  assert.equal(h.get('chat-form').submissionCount, 1);
+  const messages = h.requests.filter(request => request.url.pathname === '/api/message');
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].body.message, 'A multiline\ndraft');
+});
+
+test('mode selection retains messages and the current model and returns drawer actions to the composer', async t => {
+  const h = await dashboard(t);
+  h.get('prompt').value = 'Keep this conversation';
+  await h.get('chat-form').fire('submit');
+  const messages = [...h.get('chat-log').children];
+  const modelLoads = h.renderer.models.length;
+  h.get('companion-mode').value = 'study';
+  await h.get('companion-mode').fire('change');
+  await settle();
+  assert.deepEqual(h.get('chat-log').children, messages);
+  assert.equal(h.renderer.models.length, modelLoads, 'an unchanged presentation must not reload its model');
+  assert.equal(h.renderers.length, 1);
+  assert.equal(h.get('presence-mode').textContent, 'Study Mode');
+  const drawer = h.get('settings-drawer');
+  drawer.open = true;
+  h.window.companionWorkspace = { closeSettings() { drawer.open = false; } };
+  const focusBefore = h.get('prompt').focusCount;
+  await h.modes.find(button => button.dataset.mode === 'code').click();
+  await settle();
+  assert.equal(drawer.open, false);
+  assert.equal(h.get('prompt').focusCount, focusBefore + 1);
+  assert.match(h.get('prompt').value, /^Code Mode:/);
+  assert.deepEqual(h.get('chat-log').children, messages);
+  assert.equal(h.renderer.models.length, modelLoads);
+});
+
+test('opening settings during speech preserves the playback owner through polling and closing', async t => {
+  const h = await dashboard(t);
+  await h.get('voice-test').click();
+  const audio = h.audio[0];
+  audio.dispatchEvent(new Event('playing'));
+  await settle();
+  const modelLoads = h.renderer.models.length;
+  const cancellations = () => h.requests.filter(request => request.body?.event === 'cancel').length;
+  const cancellationsBefore = cancellations();
+  h.get('settings-drawer').open = true;
+  await h.poll();
+  assert.equal(audio.paused, false);
+  assert.equal(h.get('avatar-state').textContent, 'speaking · neutral');
+  h.get('settings-drawer').open = false;
+  await h.poll();
+  assert.equal(h.audio.length, 1);
+  assert.equal(audio.paused, false);
+  assert.equal(cancellations(), cancellationsBefore);
+  assert.equal(h.renderer.models.length, modelLoads);
+  assert.equal(h.renderers.length, 1);
+});
+
+test('a chat reply arriving while settings are open does not steal composer focus', async t => {
+  const h = await dashboard(t);
+  const reply = deferred(), received = deferred();
+  h.handlers.set('POST /api/message', () => { received.resolve(); return reply.promise; });
+  h.get('prompt').value = 'Please reply while settings are open';
+  const submitted = h.get('chat-form').fire('submit');
+  await received.promise;
+  h.get('settings-drawer').open = true;
+  const focusBefore = h.get('prompt').focusCount;
+  reply.resolve({ responseText: 'The conversation is still here.', avatar: idle() });
+  await submitted;
+  assert.equal(h.get('prompt').focusCount, focusBefore);
+  assert.match(h.get('chat-log').textContent, /The conversation is still here/);
+});
+
+test('the interrupt control pauses real playback ownership and resets avatar mouth and state', async t => {
+  const h = await dashboard(t);
+  await h.get('voice-test').click();
+  const audio = h.audio[0];
+  audio.dispatchEvent(new Event('playing'));
+  await settle();
+  assert.equal(h.get('avatar-state').textContent, 'speaking · neutral');
+  await h.get('interrupt-voice').click();
+  await settle();
+  assert.equal(audio.paused, true);
+  assert.equal(h.renderer.mouths.at(-1), 0);
+  assert.deepEqual(h.renderer.states.at(-1), idle());
+  assert.equal(h.get('avatar-state').textContent, 'idle · neutral');
+  assert.ok(h.requests.some(request => request.body?.event === 'cancel' && request.body.interactionId));
+  const eventsAfterInterrupt = h.requests.filter(request => request.body?.event).length;
+  audio.dispatchEvent(new Event('ended'));
+  await settle();
+  assert.equal(h.requests.filter(request => request.body?.event).length, eventsAfterInterrupt,
+    'events from interrupted audio must no longer affect the media owner');
+});
+
+test('microphone and image controls explain rejected consent without starting media or uploads', async t => {
+  const h = await dashboard(t);
+  const requestsBefore = h.requests.length;
+  await h.get('mic-button').click();
+  assert.equal(h.get('conversation-status').dataset.activity, 'error');
+  assert.match(h.get('conversation-status').textContent, /Enable microphone consent and disable local-first/);
+  h.get('image-upload').value = 'photo.png';
+  await h.get('image-upload').fire('change', { target: { files: [{ name: 'photo.png' }] } });
+  assert.equal(h.get('image-upload').value, '');
+  assert.equal(h.get('image-preview-container').classList.contains('hidden'), true);
+  assert.match(h.get('conversation-status').textContent, /Enable camera \/ uploaded image consent/);
+  assert.equal(h.get('conversation-status').dataset.activity, 'error');
+  assert.equal(h.requests.length, requestsBefore, 'denied capture never reaches a backend');
+  assert.equal(h.audio.length, 0);
+});
+
+test('an error during speech survives state polling and clears on the next explicit message', async t => {
+  const h = await dashboard(t);
+  await h.get('voice-test').click();
+  const audio = h.audio[0];
+  audio.dispatchEvent(new Event('playing'));
+  await settle();
+  assert.equal(h.get('conversation-status').dataset.activity, 'speaking');
+  await h.get('image-upload').fire('change', { target: { files: [{ name: 'photo.png' }] } });
+  const status = h.get('conversation-status');
+  const consentError = status.textContent;
+  assert.match(consentError, /Enable camera \/ uploaded image consent/);
+  await h.poll();
+  assert.equal(status.textContent, consentError, 'speaking polls must not hide an actionable error');
+  audio.dispatchEvent(new Event('ended'));
+  await settle();
+  await h.poll();
+  assert.equal(h.get('avatar-state').textContent, 'idle · neutral');
+  assert.equal(status.dataset.activity, 'error');
+  assert.equal(status.textContent, consentError, 'idle must not leave stale speaking feedback after an error');
+
+  const received = deferred(), reply = deferred();
+  h.handlers.set('POST /api/message', () => { received.resolve(); return reply.promise; });
+  h.get('prompt').value = 'Continue our conversation';
+  const submitted = h.get('chat-form').fire('submit');
+  await received.promise;
+  assert.equal(status.dataset.activity, 'thinking', 'an explicit new message clears the old error');
+  assert.equal(status.textContent, 'Thinking…');
+  h.backend.avatar = idle();
+  reply.resolve({ responseText: 'We can continue.', avatar: idle() });
+  await submitted;
+  assert.equal(status.dataset.activity, 'idle');
+  assert.equal(status.textContent, 'Ready when you are');
+});
+
+test('task creation and completion retain their existing API contracts', async t => {
+  const h = await dashboard(t);
+  h.get('task-kind').value = 'study';
+  h.get('task-title').value = 'Review a chapter';
+  h.get('task-details').value = 'Use active recall';
+  await h.get('task-form').fire('submit');
+  const created = h.requests.find(request => request.method === 'POST' && request.url.pathname === '/api/tasks');
+  assert.deepEqual(created.body, { kind: 'study', title: 'Review a chapter', details: 'Use active recall' });
+  assert.equal(h.get('task-title').value, '');
+  assert.equal(h.get('task-details').value, '');
+  const checkbox = h.get('task-list').children[0].children[0];
+  checkbox.checked = true;
+  await checkbox.fire('change');
+  const completed = h.requests.find(request => request.method === 'PATCH' && request.url.pathname === '/api/tasks');
+  assert.deepEqual(completed.body, { id: h.backend.tasks[0].id, done: true });
+  assert.equal(h.get('task-list').children[0].children[0].checked, true);
+});
+
+test('memory stays consent gated and retains create, edit and delete controls', async t => {
+  const h = await dashboard(t);
+  const memoryRequests = () => h.requests.filter(request => request.url.pathname === '/api/memory');
+  assert.equal(memoryRequests().length, 0);
+  assert.match(h.get('memory-list').textContent, /Enable memory consent/);
+  const consent = h.privacy.find(input => input.dataset.privacy === 'memory');
+  consent.checked = true;
+  await consent.fire('change');
+  await settle();
+  h.get('memory-category').value = 'projects';
+  h.get('memory-content').value = 'Build a companion workspace';
+  await h.get('memory-form').fire('submit');
+  const created = memoryRequests().find(request => request.method === 'POST');
+  assert.equal(created.body.category, 'projects');
+  assert.equal(created.body.content, 'Build a companion workspace');
+  assert.equal(JSON.parse(created.headers['X-Companion-Consent']).memory, true);
+  let row = h.get('memory-list').children[0];
+  await row.children[1].click();
+  assert.equal(h.get('memory-content').value, 'Build a companion workspace');
+  h.get('memory-content').value = 'Keep the companion central';
+  await h.get('memory-form').fire('submit');
+  const edited = memoryRequests().find(request => request.method === 'PATCH');
+  assert.equal(edited.body.id, h.backend.memories[0].id);
+  assert.equal(edited.body.content, 'Keep the companion central');
+  row = h.get('memory-list').children[0];
+  await row.children[2].click();
+  assert.equal(h.backend.memories.length, 0);
+  assert.ok(memoryRequests().some(request => request.method === 'DELETE'));
+  const requestsBeforeRevoke = memoryRequests().length;
+  consent.checked = false;
+  await consent.fire('change');
+  await settle();
+  assert.equal(memoryRequests().length, requestsBeforeRevoke);
+  assert.match(h.get('memory-list').textContent, /Enable memory consent/);
+});
+
+test('revoke access resets every consent and active audio while preserving the conversation', async t => {
+  const h = await dashboard(t);
+  for (const input of h.privacy) input.checked = input.dataset.privacy !== 'localFirst';
+  await h.get('voice-test').click();
+  const messages = [...h.get('chat-log').children];
+  await h.get('revoke-access').click();
+  await settle();
+  for (const input of h.privacy) {
+    const expected = input.dataset.privacy === 'localFirst';
+    assert.equal(input.checked, expected, input.dataset.privacy);
+    assert.equal(h.storage.get(`gepetto-privacy-${input.dataset.privacy}`), String(expected));
+  }
+  assert.equal(h.audio[0].paused, true);
+  assert.equal(h.renderer.mouths.at(-1), 0);
+  assert.equal(h.get('vision-status').textContent, 'Screen consent disabled.');
+  assert.equal(h.get('presence-privacy').textContent, 'Access revoked');
+  assert.deepEqual(h.get('chat-log').children, messages);
 });
