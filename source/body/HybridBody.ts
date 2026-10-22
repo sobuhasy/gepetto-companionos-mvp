@@ -10,9 +10,7 @@ export class HybridBody implements RobotBody {
     }
 
     public async free(): Promise<void> {
-        for (const body of this.bodies){
-            await body.free();
-        }
+        await Promise.allSettled(this.bodies.map(body => body.free()));
     }
 
     public async setExpression(expression: string, durationMs?: number): Promise<void> {

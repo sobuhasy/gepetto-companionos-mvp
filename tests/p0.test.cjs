@@ -96,6 +96,15 @@ test('HTTP consent gates and memory CRUD return explicit status codes', async ()
       method, headers: { 'Content-Type': 'application/json', ...(consent ? { 'X-Companion-Consent': JSON.stringify(consent) } : {}) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
+    const staleAvatarEvent = await request('/api/avatar', 'POST', { event: 'ended', interactionId: 'stale' });
+    assert.equal(staleAvatarEvent.status, 200);
+    assert.equal((await staleAvatarEvent.json()).accepted, false);
+    assert.equal((await request('/api/avatar', 'POST', { event: 'begin', activity: 'listening' })).status, 403);
+    const foreignOrigin = await fetch(address + '/api/avatar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'http://external.invalid' },
+      body: JSON.stringify({ event: 'begin', activity: 'thinking' }),
+    });
+    assert.equal(foreignOrigin.status, 403);
     for (const [path, method] of [['/api/message', 'POST'], ['/api/transcribe', 'POST'], ['/api/vision/capture', 'POST'], ['/api/vision', 'GET'], ['/api/memory', 'GET'], ['/api/voice/test', 'POST']]) {
       assert.equal((await request(path, method)).status, 403, path);
     }
@@ -113,6 +122,7 @@ test('HTTP consent gates and memory CRUD return explicit status codes', async ()
     const listing = await (await request('/api/memory', 'GET', undefined, consent)).json();
     assert.deepEqual(listing.memories, []);
     const status = await (await request('/api/status')).json();
+    assert.deepEqual(status.avatar, { activity: 'idle', emotion: 'neutral' });
     assert.ok(status.logs.some(log => log.message.includes('added')));
     assert.ok(status.logs.some(log => log.message.includes('updated')));
     assert.ok(status.logs.some(log => log.message.includes('deleted')));

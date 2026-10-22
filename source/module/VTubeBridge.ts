@@ -81,6 +81,7 @@ export class VTubeBridge implements Module{
     }
 
     public async free(): Promise<void> {
+        await this.apiClient.disconnect();
         this.isConnected = false;
         console.log("🌸[System]: Aetherial Visual Vessel gracefully disconnected.");
     }

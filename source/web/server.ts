@@ -30,6 +30,8 @@ const OBS_SOURCE_LABEL = `OBS ${OBS_SOURCE_NAME}`;
 const healthService = new SystemHealthService();
 const app = new AetherialApp();
 let isReady = false;
+let initialization: Promise<void> | undefined;
+let voiceTestBusy = false;
 let currentGeneratedProfile: GeneratedCompanionProfile | undefined;
 let latestVision: { image?: string; capturedAt?: string; source: string; status: string } = {
     source: OBS_SOURCE_LABEL,
@@ -129,7 +131,8 @@ async function ensureInitialized(): Promise<void> {
     if (isReady) {
         return;
     }
-    await app.init();
+    initialization ??= app.init().catch(error => { initialization = undefined; throw error; });
+    await initialization;
     isReady = true;
     addLog('info', 'CompanionOS runtime initialized for the Signal demo.');
 }
@@ -568,6 +571,34 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
     if (path === '/api/transcribe') requireConsent(consent.microphone, 'Microphone consent is required.');
     if (['/api/message', '/api/transcribe', '/api/voice/test'].includes(path)) requireCloudConsent(consent);
 
+    if (path === '/api/avatar' && req.method === 'POST') {
+        const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+        if (!local || (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`)) {
+            respondJson(res, 403, { error: 'Avatar events require a local same-origin client.' });
+            return true;
+        }
+        const body = await parseBody(req);
+        if (body['event'] === 'begin') {
+            requireCloudConsent(consent);
+            if (voiceTestBusy || app.isProcessing || app.avatar.current.activity !== 'idle') {
+                respondJson(res, 409, { error: 'An interaction is active. Interrupt it or wait before retrying.' });
+                return true;
+            }
+            if (body['activity'] === 'listening') requireConsent(consent.microphone, 'Microphone consent is required.');
+            await ensureInitialized();
+            if (voiceTestBusy || app.isProcessing || app.avatar.current.activity !== 'idle') {
+                respondJson(res, 409, { error: 'An interaction is active. Please retry.' });
+                return true;
+            }
+            const interactionId = await app.avatar.begin(body['activity'] === 'listening' ? 'listening' : 'thinking');
+            respondJson(res, 200, { interactionId, avatar: app.avatar.current });
+        } else {
+            const accepted = await app.avatar.event(optionalString(body['interactionId']) ?? '', optionalString(body['event']) ?? '');
+            respondJson(res, 200, { accepted, avatar: app.avatar.current });
+        }
+        return true;
+    }
+
     if (await handleCompanionProfile(req, res)) {
         return true;
     }
@@ -586,24 +617,32 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
 
     if (req.url === '/api/status' && req.method === 'GET') {
         const health = await healthService.check(isReady);
-        respondJson(res, 200, { online: true, ready: isReady, health, logs: eventLog });
+        respondJson(res, 200, { online: true, ready: isReady, avatar: app.avatar.current, health, logs: eventLog });
         return true;
     }
 
     if (req.url === '/api/voice/test' && req.method === 'POST') {
+        const body = await parseBody(req);
+        const interactionId = optionalString(body['interactionId']);
+        if (voiceTestBusy || app.isProcessing || (interactionId ? !app.avatar.isCurrent(interactionId) : app.avatar.current.activity !== 'idle')) {
+            respondJson(res, 409, { error: 'Finish or interrupt the current interaction first.' }); return true;
+        }
+        voiceTestBusy = true;
         try {
             await ensureInitialized();
             const result = await app.generateVoiceTest(consent);
+            if (interactionId && !app.avatar.preparePlayback(interactionId)) throw new Error('Voice test cancelled');
             const message = 'Voice test generated.';
             addLog('info', `${message}${result.retriedWithoutPrompt ? ' Retry without prompt was used.' : ''}`);
             respondJson(res, 200, { success: true, message, audioUrl: result.audioUrl });
             return true;
         } catch (error) {
+            if (interactionId) await app.avatar.reset(interactionId);
             const safeError = getSafeTypeCastErrorMessage(error);
             addLog('warn', `Voice test failed: ${safeError}`);
             respondJson(res, 200, { success: false, error: safeError });
             return true;
-        }
+        } finally { voiceTestBusy = false; }
     }
 
     if (req.url === '/api/transcribe' && req.method === 'POST') {
@@ -652,7 +691,13 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
             requireConsent(!image || consent.camera, 'Camera/visual consent is required for uploaded images.');
             requireConsent(!requestScreenContext || consent.screen, 'Screen consent is required.');
             await ensureInitialized();
-            const result = await app.interact(prompt, 'text', image, mode, companionProfile, requestScreenContext, consent);
+            if (voiceTestBusy) throw new Error('Voice test is still processing');
+            const interactionId = optionalString(body['interactionId']);
+            if (app.isProcessing || (!interactionId && app.avatar.current.activity !== 'idle')) {
+                respondJson(res, 409, { error: 'An interaction is active. Please retry.' });
+                return true;
+            }
+            const result = await app.interact(prompt, 'text', image, mode, companionProfile, requestScreenContext, consent, interactionId, body['audioEnabled'] !== false);
             addLog(result.success ? 'info' : 'warn', `Chat interaction ${result.success ? 'completed' : 'failed'} in ${mode} mode.`);
             respondJson(res, 200, { ...result, mode });
             return true;
@@ -698,7 +743,7 @@ function listenOnPort(server: Server, port: number): Promise<void> {
 
         server.once('error', onError);
         server.once('listening', onListening);
-        server.listen(port);
+        server.listen(port, '127.0.0.1');
     });
 }
 
@@ -738,10 +783,12 @@ async function main(): Promise<void> {
         }
     });
 
-    process.on('SIGINT', async () => {
+    const shutdown = async () => {
         await app.shutdown();
         server.close(() => process.exit(0));
-    });
+    };
+    process.once('SIGINT', shutdown);
+    process.once('SIGTERM', shutdown);
 
     addLog('info', 'Gepetto CompanionOS web dashboard booting.');
     await listenWithPortFallback(server, PORT);

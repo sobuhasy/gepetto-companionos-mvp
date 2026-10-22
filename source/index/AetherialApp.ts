@@ -1,3 +1,4 @@
+import { AvatarLifecycleController } from '../body/AvatarLifecycleController';
 import type { AvatarEmotion } from '../body/AvatarState';
 import type { LlmProvider } from '../module/LlmProvider';
 import { DEFAULT_CONSENT, requireConsent, requireCloudConsent } from '../privacy/ConsentState';
@@ -22,6 +23,7 @@ export type AetherialReply = {
     success: boolean;
     responseText: string;
     spokenText?: string;
+    audioUrl?: string;
     emotion?: string;
 };
 
@@ -313,6 +315,36 @@ export class AetherialApp {
     private eveEyes?: ObsVision;
     private readonly companionPrompts = new CompanionPromptService();
     private initialized = false;
+    public readonly avatar = new AvatarLifecycleController(() => this.requireBody());
+    private interactionBusy = false;
+    get isProcessing(): boolean { return this.interactionBusy; }
+
+    async interact(userPrompt: string, mode: InteractionMode = 'text', uploadedImage?: string, companionModeInput?: unknown, generatedProfile?: GeneratedCompanionProfile, requestScreenContext = false, consent: ConsentState = DEFAULT_CONSENT, interactionId?: string, audioEnabled = true): Promise<AetherialReply> {
+        requireCloudConsent(consent);
+        requireConsent(!uploadedImage || consent.camera, 'Camera/visual consent is required for uploaded images.');
+        requireConsent(!requestScreenContext || consent.screen, 'Screen consent is required.');
+        if (!this.initialized) throw new Error('AetherialApp not initialized');
+        if (this.interactionBusy) throw new Error('An interaction is still processing. Please retry.');
+        this.interactionBusy = true;
+        let id = interactionId;
+        let awaitingPlayback = false;
+        let ownsProcessing = false;
+        try {
+            id = id ?? await this.avatar.begin('thinking');
+            if (!this.avatar.isCurrent(id)) throw new Error('Interaction expired or cancelled');
+            if (!this.avatar.claimProcessing(id)) throw new Error('Interaction already processed');
+            ownsProcessing = true;
+            await this.avatar.event(id, 'processing');
+            const reply = await this.processInteraction(userPrompt, mode, uploadedImage, companionModeInput, generatedProfile, requestScreenContext, consent, id, audioEnabled);
+            if (!this.avatar.isCurrent(id)) throw new Error('Interaction expired or cancelled');
+            awaitingPlayback = Boolean(reply.spokenText) && interactionId !== undefined;
+            if (awaitingPlayback) this.avatar.preparePlayback(id);
+            return reply;
+        } finally {
+            this.interactionBusy = false;
+            if (id && ownsProcessing && !awaitingPlayback) await this.avatar.reset(id);
+        }
+    }
 
     async init(): Promise<void> {
         if (this.initialized) {
@@ -346,7 +378,7 @@ export class AetherialApp {
         return this.requireEars().listenAndTranscribe();
     }
 
-    async interact(userPrompt: string, mode: InteractionMode = 'text', uploadedImage?: string, companionModeInput?: unknown, generatedProfile?: GeneratedCompanionProfile, requestScreenContext = false, consent: ConsentState = DEFAULT_CONSENT): Promise<AetherialReply> {
+    private async processInteraction(userPrompt: string, mode: InteractionMode, uploadedImage: string | undefined, companionModeInput: unknown, generatedProfile: GeneratedCompanionProfile | undefined, requestScreenContext: boolean, consent: ConsentState, interactionId: string, audioEnabled: boolean): Promise<AetherialReply> {
         if (!this.initialized) {
             throw new Error('AetherialApp not initialized');
         }
@@ -399,11 +431,12 @@ export class AetherialApp {
         const visibleText = eveResponse.text;
         const emotion = eveResponse.emotion;
 
-        await this.triggerExpression(emotion, eveResponse.expressionDurationMs);
+        if (!this.avatar.isCurrent(interactionId)) throw new Error('Interaction cancelled');
+        await this.avatar.emotion(interactionId, emotion, eveResponse.expressionDurationMs);
 
         const routeProfile = getCompanionProfile(companionMode);
 
-        const spokenText = eveResponse.speak
+        const spokenText = eveResponse.speak && audioEnabled
             ? await this.generateVoiceForVisibleReply(visibleText, routeProfile.voiceId)
             : undefined;
         
@@ -417,7 +450,7 @@ export class AetherialApp {
             emotion,
         };
 
-        return spokenText ? { ...reply, spokenText } : reply;
+        return spokenText ? { ...reply, ...spokenText } : reply;
     }
 
     async captureVision(consent: ConsentState = DEFAULT_CONSENT): Promise<string | undefined> {
@@ -450,17 +483,14 @@ export class AetherialApp {
             return;
         }
 
-        await this.requireBrain().free();
-        await this.requireVoice().free();
-        await this.requireBackupVoice().free();
         this.initialized = false;
+        await this.avatar.shutdown();
+        await Promise.allSettled([
+            this.requireBrain().free(), this.requireVoice().free(), this.requireBackupVoice().free(),
+        ]);
     }
 
-    private async triggerExpression(emotion: EveEmotion, durationMs?: number): Promise<void> {
-        await this.requireBody().setExpression(emotion, durationMs);
-    }
-
-    private async generateVoiceForVisibleReply(text: string, voiceId?: string): Promise<string | undefined> {
+    private async generateVoiceForVisibleReply(text: string, voiceId?: string): Promise<{ spokenText: string; audioUrl: string } | undefined> {
         if (process.env["COMPANION_VOICE_ENABLED"] === "false") {
             return undefined;
         }
@@ -474,7 +504,7 @@ export class AetherialApp {
                 console.log("[Voice]: No safe TypeCast speech text generated.");
                 return undefined;
             }
-            return result.spokenText;
+            return { spokenText: result.spokenText, audioUrl: result.audioUrl };
         } catch (error) {
             console.warn(`[Voice]: ${getSafeTypeCastErrorMessage(error)} Continuing text-only unless local fallback is enabled.`);
         }
@@ -490,7 +520,7 @@ export class AetherialApp {
 
         try {
             await this.requireBackupVoice().generate(localFallbackText);
-            return localFallbackText;
+            return { spokenText: localFallbackText, audioUrl: '/eve_voice_local.wav' };
         } catch (error) {
             console.warn("[Voice]: Local fallback failed. Text response remains available.", error);
             return undefined;

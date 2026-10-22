@@ -149,9 +149,7 @@ let editingMemoryId = null;
 let activeMode = companionMode?.value || 'productivity';
 let companionProfile = fallbackCompanionProfile;
 
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+
 
 function setControlsDisabled(disabled) {
   sendButton.disabled = disabled;
@@ -237,6 +235,31 @@ async function fetchJson(url, options = {}) {
   return payload;
 }
 
+let recordedInteractionId = null;
+let recordingCancelled = false;
+const avatarMedia = new AvatarMediaSession(body => fetchJson('/api/avatar', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+}));
+const stopVoiceButton = document.createElement('button');
+stopVoiceButton.type = 'button';
+stopVoiceButton.className = 'secondary-btn';
+stopVoiceButton.textContent = 'Interrupt voice';
+autoPlayToggle.parentElement.appendChild(stopVoiceButton);
+stopVoiceButton.addEventListener('click', () => {
+  recordingCancelled = true;
+  if (isRecording && mediaRecorder) mediaRecorder.stop();
+  avatarMedia.cancel().catch(() => {});
+});
+autoPlayToggle.addEventListener('change', () => {
+  if (!autoPlayToggle.checked) avatarMedia.cancel().catch(() => {});
+});
+window.addEventListener('pagehide', () => {
+  if (avatarMedia.id) fetch('/api/avatar', {
+    method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event: 'cancel', interactionId: avatarMedia.id }),
+  }).catch(() => {});
+});
+
 async function transcribeAudioBlob(audioBlob) {
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -272,8 +295,12 @@ async function toggleRecording() {
     return;
   }
 
+  let microphoneStream;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    await avatarMedia.cancel();
+    microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = microphoneStream;
+    recordingCancelled = false;
     audioChunks = [];
     mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 
@@ -283,11 +310,23 @@ async function toggleRecording() {
       }
     });
 
+    mediaRecorder.addEventListener('error', () => {
+      stream.getTracks().forEach(track => track.stop());
+      setMicState(false);
+      avatarMedia.cancel().catch(() => {});
+    });
+    let recordingSession;
+    let recordingId;
+    mediaRecorder.addEventListener('start', () => {
+      recordingSession = avatarMedia.begin('listening');
+      recordingSession.catch(() => { if (mediaRecorder.state !== 'inactive') mediaRecorder.stop(); });
+    });
     mediaRecorder.addEventListener('stop', async () => {
       setMicState(false);
       stream.getTracks().forEach((track) => track.stop());
 
-      if (audioChunks.length === 0) {
+      if (recordingCancelled || audioChunks.length === 0) {
+        await avatarMedia.cancel();
         return;
       }
 
@@ -296,7 +335,11 @@ async function toggleRecording() {
       try {
         isTranscribing = true;
         setControlsDisabled(true);
+        recordingId = await recordingSession;
+        if (avatarMedia.id !== recordingId) return;
+        await avatarMedia.event('processing', recordingId);
         const transcript = await transcribeAudioBlob(audioBlob);
+        if (avatarMedia.id !== recordingId) return;
 
         if (!transcript) {
           addMessage('companion', 'I listened carefully, but I could not hear any clear words.');
@@ -305,56 +348,26 @@ async function toggleRecording() {
 
         const existingText = promptInput.value.trim();
         promptInput.value = existingText ? `${existingText} ${transcript}` : transcript;
+        recordedInteractionId = recordingId;
         promptInput.focus();
       } catch (error) {
         addMessage('companion', `Microphone transcription failed: ${error.message}`);
       } finally {
         isTranscribing = false;
         setControlsDisabled(false);
+        if (recordedInteractionId && avatarMedia.id === recordedInteractionId) form.requestSubmit();
+        else if (recordingId) await avatarMedia.finish('ended', recordingId).catch(() => {});
       }
     });
 
     mediaRecorder.start();
     setMicState(true);
   } catch (error) {
+    microphoneStream?.getTracks().forEach(track => track.stop());
+    await avatarMedia.cancel().catch(() => {});
     addMessage('companion', `Microphone access failed: ${error.message}`);
     setMicState(false);
   }
-}
-
-async function playAudioWithRetry(audioUrl, attempts = 3, delayMs = 150) {
-  for (let index = 0; index < attempts; index += 1) {
-    const companionVoice = new Audio(audioUrl);
-    companionVoice.preload = 'auto';
-
-    try {
-      await companionVoice.play();
-      return true;
-    } catch (playbackError) {
-      console.warn(`Audio playback attempt ${index + 1}/${attempts} failed for ${audioUrl}`, playbackError);
-      await wait(delayMs);
-    }
-  }
-
-  return false;
-}
-
-async function playLatestVoice() {
-  const cacheBust = Date.now();
-  const audioCandidates = [
-    `/eve_voice.wav?t=${cacheBust}`,
-    `/eve_voice.mp3?t=${cacheBust}`,
-    `/eve_voice.ogg?t=${cacheBust}`,
-    `/eve_voice_local.wav?t=${cacheBust}`,
-  ];
-
-  for (const audioUrl of audioCandidates) {
-    if (await playAudioWithRetry(audioUrl)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 async function loadSystemStatus() {
@@ -507,26 +520,22 @@ if (micButton) {
 sttReadyToggle.addEventListener('change', () => setControlsDisabled(false));
 voiceTestButton.addEventListener('click', async () => {
   voiceTestButton.disabled = true;
+  let interactionId;
   try {
-    const payload = await fetchJson('/api/voice/test', { method: 'POST' });
-    if (!payload.success) {
-      throw new Error(payload.error ?? 'TypeCast voice test failed.');
+    interactionId = await avatarMedia.begin('thinking');
+    const payload = await fetchJson('/api/voice/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interactionId }),
+    });
+    if (!payload.success) throw new Error(payload.error ?? 'TypeCast voice test failed.');
+    if (avatarMedia.id !== interactionId) return;
+    if (!payload.audioUrl || !(await avatarMedia.play(`${payload.audioUrl}?t=${Date.now()}`))) {
+      throw new Error('Browser playback failed. Check audio output routing.');
     }
-
-    const audioUrl = typeof payload.audioUrl === 'string' ? payload.audioUrl : '';
-    const cacheBust = `${audioUrl}${audioUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
-    const playedGeneratedAudio = audioUrl ? await playAudioWithRetry(cacheBust) : false;
-    if (!playedGeneratedAudio && !(await playLatestVoice())) {
-      addMessage('companion', 'Voice test generated, but browser playback failed. Check audio output routing.');
-      return;
-    }
-
     addMessage('companion', payload.message ?? 'Voice test generated.');
   } catch (error) {
-    const fallbackPlayed = await playLatestVoice();
-    const fallbackNote = fallbackPlayed ? ' The latest existing voice file was played instead.' : '';
-    const reason = String(error.message || 'TypeCast voice test failed').replace(/[.\s]+$/, '');
-    addMessage('companion', `Voice test failed: ${reason}.${fallbackNote}`);
+    if (interactionId) await avatarMedia.finish('error', interactionId).catch(() => {});
+    addMessage('companion', `Voice test failed: ${error.message}`);
   } finally {
     voiceTestButton.disabled = false;
   }
@@ -620,25 +629,36 @@ form.addEventListener('submit', async (event) => {
   imageUpload.value = '';
   setControlsDisabled(true);
 
+  let interactionId;
   try {
+    interactionId = recordedInteractionId ?? await avatarMedia.begin('thinking');
+    recordedInteractionId = null;
     const payload = await fetchJson('/api/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message,
+        interactionId,
+        audioEnabled: autoPlayToggle.checked,
         image: imageToSend,
         mode: activeMode,
         companionProfile,
       }),
     });
 
-    if (autoPlayToggle.checked && payload.spokenText && !(await playLatestVoice())) {
-      addMessage('companion', 'I answered, but audio playback failed. Check voice output routing.');
+    if (avatarMedia.id !== interactionId) return;
+    if (autoPlayToggle.checked && payload.spokenText && payload.audioUrl) {
+      if (!(await avatarMedia.play(`${payload.audioUrl}?t=${Date.now()}`))) {
+        addMessage('companion', 'I answered, but audio playback failed. Check voice output routing.');
+      }
+    } else {
+      await avatarMedia.finish('ended', interactionId);
     }
 
     addMessage('companion', payload.responseText ?? 'No response text received.');
     await loadSystemStatus();
   } catch (error) {
+    if (interactionId) await avatarMedia.finish('error', interactionId).catch(() => {});
     addMessage('companion', `Network error: ${error.message}`);
   } finally {
     setControlsDisabled(false);

@@ -11,6 +11,9 @@ const EXPRESSION_FILES: Record<string, string> = {
 };
 
 export class VTubeBody implements RobotBody {
+    private expressionTimer: ReturnType<typeof setTimeout> | undefined;
+    private activeExpression: string | undefined;
+    private expressionVersion = 0;
     public constructor(private readonly bridge = new VTubeBridge()) {}
 
     public async init(): Promise<void> {
@@ -18,27 +21,29 @@ export class VTubeBody implements RobotBody {
     }
 
     public async free(): Promise<void> {
+        await this.setExpression('neutral');
         await this.bridge.free();
     }
 
     public async setExpression(expression: string, durationMs = 5000): Promise<void> {
+        const version = ++this.expressionVersion;
+        clearTimeout(this.expressionTimer);
+        const previous = this.activeExpression;
+        this.activeExpression = undefined;
+        if (previous) await this.bridge.clearExpression(previous);
         const expressionFile = EXPRESSION_FILES[expression];
-
-        if(!expressionFile) {
-            return;
-        }
-
+        if (!expressionFile || version !== this.expressionVersion) return;
+        this.activeExpression = expressionFile;
         await this.bridge.triggerExpression(expressionFile);
-
-        setTimeout(async () => {
-            try {
-                await this.bridge.clearExpression(expressionFile);
-            } catch (error){
-                console.error("Failed to reset robot body expression:", error);
-            }
+        if (version !== this.expressionVersion) return;
+        this.expressionTimer = setTimeout(() => {
+            if (version !== this.expressionVersion) return;
+            this.activeExpression = undefined;
+            void this.bridge.clearExpression(expressionFile).catch(() => undefined);
         }, durationMs);
+        this.expressionTimer.unref();
     }
-    
+
     public async speak(text: string): Promise<void> {
         void text;
         // VTube Studio doesn't synthesize speech directly
