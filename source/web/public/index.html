@@ -2,72 +2,90 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gepetto CompanionOS - Signal Demo v0.1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#0b0d18" />
+  <title>Gepetto — Your companion workspace</title>
   <link rel="stylesheet" href="/styles.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-  <main class="dashboard-shell">
-    <aside class="sidebar" aria-label="Gepetto CompanionOS modules">
-      <div class="brand-card">
-        <div class="brand-logo" aria-label="Gepetto Robotics logo"><span></span></div>
-        <div>
-          <p class="eyebrow">Gepetto CompanionOS</p>
-          <h1>Signal Demo v0.1</h1>
-        </div>
+  <svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" style="position:absolute;overflow:hidden">
+    <defs><symbol id="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></symbol><symbol id="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 6 12 12M6 18 18 6"/></symbol><symbol id="icon-sparkle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z"/></symbol><symbol id="icon-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></symbol><symbol id="icon-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 10 5-10 5L2 8l10-5ZM2 12l10 5 10-5M2 16l10 5 10-5"/></symbol><symbol id="icon-tasks" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3 6 2 2 4-4M12 6h9M3 13l2 2 4-4M12 13h9M12 20h9M3 20h5"/></symbol><symbol id="icon-memory" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6m-5 3h4M8 14a7 7 0 1 1 8 0c-1 1-1 2-1 4H9c0-2 0-3-1-4Z"/></symbol><symbol id="icon-voice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4M8 6v12M12 3v18M16 6v12M20 10v4"/></symbol><symbol id="icon-screen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8M12 16v5"/></symbol><symbol id="icon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></symbol><symbol id="icon-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3 12 4-1 3-7 4 16 3-8h4"/></symbol><symbol id="icon-about" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol><symbol id="icon-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><path d="m21 15-5-5L5 21"/></symbol><symbol id="icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></symbol><symbol id="icon-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol><symbol id="icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 19 9-19 9 4-9-4-9ZM7 12h15"/></symbol></defs>
+  </svg>
+  <main id="home" class="companion-shell">
+    <header class="topbar">
+      <a class="brand-link" href="#home" aria-label="Gepetto CompanionOS home">
+        <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-sparkle"></use></svg></span>
+        <span class="brand-wordmark">Gepetto<small>CompanionOS</small></span>
+      </a>
+      <div class="companion-presence">
+        <strong id="presence-name">Aerin</strong>
+        <span id="connection-status" class="connection-status" role="status" data-status="connecting">Connecting</span>
       </div>
-      <nav class="module-nav">
-        <a href="#home"><i class="fa-solid fa-house"></i><span>Home</span></a>
-        <a href="#identity"><i class="fa-solid fa-fingerprint"></i><span>Identity</span></a>
-        <a href="#avatar"><i class="fa-solid fa-user"></i><span>Avatar</span></a>
-        <a href="#modes"><i class="fa-solid fa-layer-group"></i><span>Modes</span></a>
-        <a href="#memory"><i class="fa-solid fa-brain"></i><span>Memory</span></a>
-        <a href="#tasks"><i class="fa-solid fa-list-check"></i><span>Plan</span></a>
-        <a href="#voice"><i class="fa-solid fa-wave-square"></i><span>Voice</span></a>
-        <a href="#privacy"><i class="fa-solid fa-shield-heart"></i><span>Privacy</span></a>
-        <a href="#roadmap"><i class="fa-solid fa-route"></i><span>Roadmap</span></a>
-        <a href="#system"><i class="fa-solid fa-server"></i><span>System</span></a>
-      </nav>
-    </aside>
-
-    <section class="workspace">
-      <header id="home" class="hero-panel">
-        <div class="hero-copy">
-          <p class="eyebrow">From chatbot to CompanionOS</p>
-          <h2>Gepetto CompanionOS: one AI companion, many working modes.</h2>
-          <p>A persistent companion identity moves across study, code, productivity, Japanese, creative, and support modes with chat, voice, user-owned memory, daily plans, and consent-based context.</p>
-          <div class="hero-actions">
-            <a class="secondary-btn" href="#chat">Open workspace</a>
-            <a class="secondary-btn ghost" href="#privacy">Review privacy</a>
-          </div>
+      <div class="topbar-actions">
+        <div class="mode-picker"><label for="companion-mode" class="sr-only">Companion mode</label><select id="companion-mode" aria-label="Workspace mode"><option value="productivity">Productivity Mode</option><option value="study">Study Mode</option><option value="code">Code Mode</option><option value="japanese">Japanese Coach</option><option value="creative">Creative Mode</option><option value="support">Emotional Support Mode</option></select></div>
+        <button id="menu-button" class="icon-button" type="button" aria-label="Open companion settings" aria-controls="settings-drawer" aria-expanded="false" title="Companion settings"><svg class="icon" aria-hidden="true"><use href="#icon-menu"></use></svg></button>
+      </div>
+    </header>
+    <div class="companion-workspace">
+      <section class="avatar-workspace" aria-label="Live companion">
+        <div class="stage-heading"><p class="eyebrow"><span class="stage-label">Your companion</span><strong id="stage-companion-name" class="mobile-companion-name">Aerin</strong></p><span id="avatar-state" class="module-tag">idle · neutral</span></div>
+        <div class="live2d-stage">
+          <div class="stage-ambience" aria-hidden="true"></div>
+          <canvas id="live2d-canvas" width="900" height="1000" role="img" aria-label="Animated Live2D companion avatar"></canvas>
+          <p id="avatar-render-status" role="status">Loading your companion…</p>
         </div>
-        <article class="presence-card" aria-label="Companion presence card">
-          <div class="presence-top">
-            <div class="companion-avatar" aria-hidden="true"><span></span></div>
-            <div>
-              <p class="eyebrow">Companion online</p>
-              <h3 id="presence-name">Aerin</h3>
+        <div class="stage-footer"><span>Locally rendered. Here with you.</span><button class="secondary-btn" type="button" data-open-panel="avatar"><svg class="icon" aria-hidden="true"><use href="#icon-sparkle"></use></svg><span>Appearance & voice</span></button></div>
+      </section>
+      <section id="chat" class="conversation-panel" aria-labelledby="conversation-title">
+        <div class="conversation-heading"><div><p class="eyebrow">You & your companion</p><h1 id="conversation-title">Conversation</h1></div><button class="icon-button" type="button" data-open-panel="privacy" aria-label="Privacy and permissions" title="Privacy and permissions"><svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg></button></div>
+        <div class="conversation-body">
+          <div id="chat-log" class="chat" role="log" aria-label="Conversation history" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
+          <button id="jump-to-latest" class="latest-button hidden" type="button">New messages ↓</button>
+        </div>
+        <div class="composer-area">
+          <div id="conversation-status" class="conversation-status" data-activity="idle" role="status">Ready when you are</div>
+          <div id="image-preview-container" class="hidden"><img id="image-preview" alt="Attached image preview"><span>Image attached</span><button id="remove-image" class="icon-button" type="button" aria-label="Remove attached image" title="Remove image"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button></div>
+          <form id="chat-form" class="composer">
+            <label for="prompt" class="sr-only">Your message</label>
+            <textarea id="prompt" name="prompt" placeholder="What’s on your mind?" rows="2" aria-describedby="composer-hint"></textarea>
+            <div class="composer-toolbar">
+              <div class="composer-tools">
+                <button id="image-upload-button" class="icon-button" type="button" title="Attach image" aria-label="Attach image"><svg class="icon" aria-hidden="true"><use href="#icon-image"></use></svg></button>
+                <input type="file" id="image-upload" accept="image/*" class="sr-only" tabindex="-1" aria-label="Choose image to attach">
+                <button id="mic-button" class="mic-btn icon-button" type="button" title="Start microphone input" aria-label="Start microphone input" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#icon-mic"></use></svg></button>
+                <button id="interrupt-voice" class="icon-button" type="button" title="Interrupt voice" aria-label="Interrupt voice"><svg class="icon" aria-hidden="true"><use href="#icon-stop"></use></svg></button>
+              </div>
+              <span id="composer-hint" class="composer-hint">Shift + Enter for a new line</span>
+              <button id="send-button" class="send-button" type="submit"><span>Send</span><svg class="icon" aria-hidden="true"><use href="#icon-send"></use></svg></button>
             </div>
-            <div class="status-dot" title="Online"></div>
-          </div>
-          <dl class="presence-list">
-            <div><dt>Status</dt><dd>Online</dd></div>
-            <div><dt>Active mode</dt><dd id="presence-mode">Productivity Mode</dd></div>
-            <div><dt>Voice</dt><dd id="presence-voice">Ready with consent</dd></div>
-            <div><dt>Memory</dt><dd id="presence-memory">User-owned</dd></div>
-            <div><dt>Privacy</dt><dd id="presence-privacy">Local-first controls</dd></div>
-          </dl>
-          <div class="status-pill" id="runtime-pill">Checking runtime…</div>
-        </article>
-      </header>
-
-      <section id="identity" class="module-card identity-card">
+          </form>
+          <div class="composer-footnote"><button type="button" data-open-panel="privacy"><svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg><span>Your space. Your permissions.</span></button></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <dialog id="settings-drawer" class="settings-drawer" aria-labelledby="drawer-title">
+    <div class="drawer-header"><div><p class="eyebrow">Your space</p><h2 id="drawer-title">Companion settings</h2></div><button id="close-settings" class="icon-button" type="button" aria-label="Close settings" title="Close settings" autofocus><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button></div>
+    <div class="drawer-layout">
+      <nav class="settings-nav" aria-label="Companion settings sections">
+        <button type="button" data-panel="identity" aria-controls="identity" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#icon-person"></use></svg><span>Companion Identity</span></button>
+        <button type="button" data-panel="avatar" aria-controls="avatar"><svg class="icon" aria-hidden="true"><use href="#icon-sparkle"></use></svg><span>Appearance & voice</span></button>
+        <button type="button" data-panel="modes" aria-controls="modes"><svg class="icon" aria-hidden="true"><use href="#icon-layers"></use></svg><span>Modes</span></button>
+        <button type="button" data-panel="tasks" aria-controls="tasks"><svg class="icon" aria-hidden="true"><use href="#icon-tasks"></use></svg><span>Tasks / Productivity</span></button>
+        <button type="button" data-panel="memory" aria-controls="memory"><svg class="icon" aria-hidden="true"><use href="#icon-memory"></use></svg><span>Long-term Memory</span></button>
+        <button type="button" data-panel="voice" aria-controls="voice"><svg class="icon" aria-hidden="true"><use href="#icon-voice"></use></svg><span>Voice settings</span></button>
+        <button type="button" data-panel="vision" aria-controls="vision"><svg class="icon" aria-hidden="true"><use href="#icon-screen"></use></svg><span>Screen Context / Vision</span></button>
+        <button type="button" data-panel="privacy" aria-controls="privacy"><svg class="icon" aria-hidden="true"><use href="#icon-shield"></use></svg><span>Privacy & Permissions</span></button>
+        <button type="button" data-panel="system" aria-controls="system"><svg class="icon" aria-hidden="true"><use href="#icon-system"></use></svg><span>System Health / Logs</span></button>
+        <button type="button" data-panel="roadmap" aria-controls="roadmap"><svg class="icon" aria-hidden="true"><use href="#icon-about"></use></svg><span>Roadmap / About</span></button>
+      </nav>
+      <div class="settings-content">
+        <section id="identity" class="settings-panel module-card">
         <div class="module-heading">
           <div>
             <p class="eyebrow">Companion Identity</p>
-            <h3>One persistent identity across every mode.</h3>
-            <p class="identity-copy">The companion keeps its name, voice style, memory, and working relationship while its behavior adapts to the task.</p>
+            <h3>Meet your companion</h3>
+            <p class="identity-copy">Shape the identity that stays with you across every mode.</p>
           </div>
           <span id="profile-status" class="module-tag">Loading profile</span>
         </div>
@@ -99,18 +117,7 @@
           </div>
         </form>
       </section>
-
-      <section id="avatar" class="module-card">
-        <div class="module-heading">
-          <div><p class="eyebrow">Live2D Avatar</p><h3>Your companion, locally rendered</h3></div>
-          <span id="avatar-state" class="module-tag">Idle · neutral</span>
-        </div>
-        <div class="live2d-layout">
-          <div class="live2d-stage">
-            <canvas id="live2d-canvas" width="600" height="600" role="img" aria-label="Animated companion avatar"></canvas>
-            <p id="avatar-render-status" role="status">Choose an authorized local model to show your companion.</p>
-          </div>
-          <form id="avatar-settings" class="avatar-settings">
+        <section id="avatar" class="settings-panel module-card" hidden><div class="module-heading"><div><p class="eyebrow">Make it yours</p><h3>Appearance & voice</h3></div></div><form id="avatar-settings" class="avatar-settings">
             <label>Local model URL<input id="avatar-model-url" type="text" placeholder="/models/my-companion/companion.model3.json" spellcheck="false"></label>
             <label>TypeCast voice ID<input id="avatar-voice-id" type="text" placeholder="Leave blank to use your configured voice" spellcheck="false"></label>
             <details>
@@ -120,65 +127,43 @@
             </details>
             <button id="save-avatar-settings" class="secondary-btn" type="submit">Save model and voice</button>
             <p id="avatar-settings-status" class="muted" role="status">Settings belong to this companion profile.</p>
+            <p id="avatar-rig-status" class="muted">Live2D model diagnostics will appear here.</p>
             <p class="muted">Install the official Cubism SDK and place a model you have permission to use in your local model folder. See <a href="https://www.live2d.com/en/sdk/download/web/" target="_blank" rel="noreferrer">official SDK download</a> and the repository’s docs/native-live2d.md for setup. Model files stay on this computer. Voice generation still follows your privacy settings.</p>
-          </form>
-        </div>
-      </section>
-
-      <section id="modes" class="module-card">
+          </form></section>
+        <section id="modes" class="settings-panel module-card" hidden>
         <div class="module-heading">
-          <div><p class="eyebrow">One Companion, Many Modes</p><h3>Switch the same identity into the right working state.</h3></div>
+          <div><p class="eyebrow">Working together</p><h3>A different focus. The same companion.</h3></div>
           <span class="module-tag">Public demo modes</span>
         </div>
-        <p id="mode-adaptation-text" class="muted">Aerin is adapting to Productivity Mode. Same companion, focused behavior.</p>
+        <p class="muted">Active mode: <strong id="presence-mode">Productivity Mode</strong></p><p id="mode-adaptation-text" class="muted">Aerin is adapting to Productivity Mode. Same companion, focused behavior.</p>
         <div class="mode-grid">
-          <article class="mode-card"><i class="fa-solid fa-book-open-reader"></i><h4>Study Mode</h4><p>Active recall, summaries, notes, and quizzes for any topic.</p><button class="mode-btn" data-label="Study Mode" data-mode="study" data-prompt="Study Mode: Help me study one topic using active recall, a concise summary, structured notes, and a tiny quiz.">Start Study Mode</button></article>
-          <article class="mode-card"><i class="fa-solid fa-code"></i><h4>Code Mode</h4><p>Explain, debug, refactor, and plan implementation steps.</p><button class="mode-btn" data-label="Code Mode" data-mode="code" data-prompt="Code Mode: Help me explain, debug, refactor, or plan this implementation in clear steps.">Start Code Mode</button></article>
-          <article class="mode-card"><i class="fa-solid fa-calendar-check"></i><h4>Productivity Mode</h4><p>Daily plan, reminders, task breakdown, and execution support.</p><button class="mode-btn" data-label="Productivity Mode" data-mode="productivity" data-prompt="Productivity Mode: Help me turn today into a clear daily plan with priorities, reminders, and small next actions.">Start Productivity</button></article>
-          <article class="mode-card"><i class="fa-solid fa-torii-gate"></i><h4>Japanese Coach</h4><p>Vocabulary, grammar, sentence correction, and kana/kanji recall.</p><button class="mode-btn" data-label="Japanese Coach" data-mode="japanese" data-prompt="Japanese Coach: Run a focused Japanese drill with vocabulary, grammar, sentence correction, kana or kanji recall, and encouraging feedback.">Start Japanese Coach</button></article>
-          <article class="mode-card"><i class="fa-solid fa-wand-magic-sparkles"></i><h4>Creative Mode</h4><p>Brainstorming, writing, concept generation, and worldbuilding.</p><button class="mode-btn" data-label="Creative Mode" data-mode="creative" data-prompt="Creative Mode: Help me brainstorm, write, and generate polished concepts with useful options and next steps.">Start Creative Mode</button></article>
-          <article class="mode-card"><i class="fa-solid fa-heart-pulse"></i><h4>Emotional Support Mode</h4><p>Reflection, grounding, check-ins, and gentle planning.</p><button class="mode-btn" data-label="Emotional Support Mode" data-mode="support" data-prompt="Emotional Support Mode: Help me reflect calmly, ground myself, check in, and choose one gentle next step.">Start Check-in</button></article>
+          <article class="mode-card"><svg class="icon" aria-hidden="true"><use href="#icon-memory"></use></svg><h4>Study Mode</h4><p>Active recall, summaries, notes, and quizzes for any topic.</p><button class="mode-btn" data-label="Study Mode" data-mode="study" data-prompt="Study Mode: Help me study one topic using active recall, a concise summary, structured notes, and a tiny quiz.">Start Study Mode</button></article>
+          <article class="mode-card"><svg class="icon" aria-hidden="true"><use href="#icon-layers"></use></svg><h4>Code Mode</h4><p>Explain, debug, refactor, and plan implementation steps.</p><button class="mode-btn" data-label="Code Mode" data-mode="code" data-prompt="Code Mode: Help me explain, debug, refactor, or plan this implementation in clear steps.">Start Code Mode</button></article>
+          <article class="mode-card"><svg class="icon" aria-hidden="true"><use href="#icon-tasks"></use></svg><h4>Productivity Mode</h4><p>Daily plan, reminders, task breakdown, and execution support.</p><button class="mode-btn" data-label="Productivity Mode" data-mode="productivity" data-prompt="Productivity Mode: Help me turn today into a clear daily plan with priorities, reminders, and small next actions.">Start Productivity</button></article>
+          <article class="mode-card"><svg class="icon" aria-hidden="true"><use href="#icon-sparkle"></use></svg><h4>Japanese Coach</h4><p>Vocabulary, grammar, sentence correction, and kana/kanji recall.</p><button class="mode-btn" data-label="Japanese Coach" data-mode="japanese" data-prompt="Japanese Coach: Run a focused Japanese drill with vocabulary, grammar, sentence correction, kana or kanji recall, and encouraging feedback.">Start Japanese Coach</button></article>
+          <article class="mode-card"><svg class="icon" aria-hidden="true"><use href="#icon-sparkle"></use></svg><h4>Creative Mode</h4><p>Brainstorming, writing, concept generation, and worldbuilding.</p><button class="mode-btn" data-label="Creative Mode" data-mode="creative" data-prompt="Creative Mode: Help me brainstorm, write, and generate polished concepts with useful options and next steps.">Start Creative Mode</button></article>
+          <article class="mode-card"><svg class="icon" aria-hidden="true"><use href="#icon-voice"></use></svg><h4>Emotional Support Mode</h4><p>Reflection, grounding, check-ins, and gentle planning.</p><button class="mode-btn" data-label="Emotional Support Mode" data-mode="support" data-prompt="Emotional Support Mode: Help me reflect calmly, ground myself, check in, and choose one gentle next step.">Start Check-in</button></article>
         </div>
       </section>
-
-      <section id="chat" class="module-card chat-module">
-        <div class="module-heading"><div><p class="eyebrow">Chat and Voice</p><h3>Talk to your companion</h3></div><span class="module-tag">Core Signal loop</span></div>
-        <div id="chat-log" class="chat" aria-live="polite"></div>
-        <form id="chat-form" class="composer">
-          <label for="image-upload" class="upload-btn" title="Upload image"><i class="fa-solid fa-image"></i></label>
-          <button id="mic-button" class="mic-btn" type="button" title="Start microphone input" aria-pressed="false"><i class="fa-solid fa-microphone"></i></button>
-          <input type="file" id="image-upload" accept="image/*" class="sr-only">
-          <label for="companion-mode" class="sr-only">Companion mode</label>
-          <select id="companion-mode" aria-label="Workspace mode"><option value="productivity">Productivity Mode</option><option value="study">Study Mode</option><option value="code">Code Mode</option><option value="japanese">Japanese Coach</option><option value="creative">Creative Mode</option><option value="support">Emotional Support Mode</option></select>
-          <label for="prompt" class="sr-only">Your message</label>
-          <textarea id="prompt" name="prompt" placeholder="Type a message for your companion... (Enter to send, Shift+Enter for newline)" rows="3" required></textarea>
-          <button id="send-button" type="submit">Send</button>
-        </form>
-        <div id="image-preview-container" class="hidden"><img id="image-preview" src="" alt="Image Preview"><button id="remove-image" type="button"><i class="fa-solid fa-xmark"></i></button></div>
-      </section>
-
-      <section class="module-grid">
-        <article id="voice" class="module-card"><div class="module-heading"><div><p class="eyebrow">Voice</p><h3>TTS / STT controls</h3></div><span class="module-tag">Consent based</span></div><div class="control-stack"><label><input id="auto-play-toggle" type="checkbox" checked> Auto-play companion voice after responses</label><label><input id="stt-ready-toggle" type="checkbox" checked> Enable browser STT recording button</label><button id="voice-test" class="secondary-btn" type="button">Generate voice test</button></div><p class="muted">Cloud TTS, local fallback, microphone transcription, and playback routing live here.</p></article>
-        <article id="vision" class="module-card"><div class="module-heading"><div><p class="eyebrow">Screen Context</p><h3>Latest OBS / screen frame</h3></div><button id="capture-vision" class="secondary-btn" type="button">Capture</button></div><div id="vision-preview" class="vision-preview">No screen context captured yet.</div><p id="vision-status" class="muted">Use Capture only when you consent to share current screen context.</p></article>
-        <article id="memory" class="module-card wide-card"><div class="module-heading"><div><p class="eyebrow">User-owned memory</p><h3>View / edit long-term memory</h3></div><button id="refresh-memory" class="secondary-btn" type="button">Refresh</button></div><div class="chip-row"><span>user profile</span><span>projects</span><span>language learning</span><span>coding history</span><span>emotional preferences</span></div><form id="memory-form" class="memory-form"><select id="memory-category" aria-label="Memory category"></select><input id="memory-content" type="text" placeholder="Add a user-owned memory..." required><button type="submit">Save memory</button></form><div id="memory-list" class="list-panel"></div></article>
-        <article id="tasks" class="module-card wide-card"><div class="module-heading"><div><p class="eyebrow">Today's Plan</p><h3>Tasks, sprints, and follow-through</h3></div><span class="module-tag">Daily execution</span></div><form id="task-form" class="task-form"><select id="task-kind"><option value="workflow">Workflow</option><option value="study">Study</option><option value="project">Project</option></select><input id="task-title" type="text" placeholder="Add task" required><input id="task-details" type="text" placeholder="Task details"><button type="submit">Add</button></form><div id="task-list" class="list-panel"></div></article>
-      </section>
-
-      <section id="privacy" class="module-card"><div class="module-heading"><div><p class="eyebrow">Privacy Center</p><h3>Your data. Your rules.</h3><p class="muted">Nothing is captured without consent. No hardware required for Signal Demo.</p></div><button id="revoke-access" class="secondary-btn" type="button">Revoke access</button></div><div class="privacy-grid"><label><input type="checkbox" data-privacy="microphone"> Microphone consent</label><label><input type="checkbox" data-privacy="camera"> Camera / uploaded image consent</label><label><input type="checkbox" data-privacy="screen"> Screen context</label><label><input type="checkbox" data-privacy="memory"> Memory enabled</label><label><input type="checkbox" data-privacy="localFirst" checked> Local-first mode</label><div class="privacy-note">Consent is enforced per request. Local-first blocks cloud chat, transcription and voice; disable it to use these features.</div></div></section>
-
-      <section id="roadmap" class="roadmap-grid">
+        <article id="tasks" class="settings-panel module-card" hidden><div class="module-heading"><div><p class="eyebrow">Today's Plan</p><h3>Tasks, sprints, and follow-through</h3></div><span class="module-tag">Daily execution</span></div><form id="task-form" class="task-form"><select id="task-kind" aria-label="Task kind"><option value="workflow">Workflow</option><option value="study">Study</option><option value="project">Project</option></select><input id="task-title" aria-label="Task title" type="text" placeholder="Add task" required><input id="task-details" aria-label="Task details" type="text" placeholder="Task details"><button type="submit">Add</button></form><div id="task-list" class="list-panel"></div></article>
+        <article id="memory" class="settings-panel module-card" hidden><div class="module-heading"><div><p class="eyebrow">User-owned memory</p><h3>View / edit long-term memory</h3></div><button id="refresh-memory" class="secondary-btn" type="button">Refresh</button></div><p id="presence-memory" class="muted">User-owned memory</p><div class="chip-row"><span>user profile</span><span>projects</span><span>language learning</span><span>coding history</span><span>emotional preferences</span></div><form id="memory-form" class="memory-form"><select id="memory-category" aria-label="Memory category"></select><input id="memory-content" aria-label="Memory content" type="text" placeholder="Add a user-owned memory..." required><button type="submit">Save memory</button></form><div id="memory-list" class="list-panel"></div></article>
+        <article id="voice" class="settings-panel module-card" hidden><div class="module-heading"><div><p class="eyebrow">Voice</p><h3>TTS / STT controls</h3></div><span class="module-tag">Consent based</span></div><p id="presence-voice" class="muted">Ready with consent</p><div class="control-stack"><label><input id="auto-play-toggle" type="checkbox" checked> Auto-play companion voice after responses</label><label><input id="stt-ready-toggle" type="checkbox" checked> Enable browser STT recording button</label><button id="voice-test" class="secondary-btn" type="button">Generate voice test</button></div><p class="muted">Cloud TTS, local fallback, microphone transcription, and playback routing live here.</p></article>
+        <article id="vision" class="settings-panel module-card" hidden><div class="module-heading"><div><p class="eyebrow">Screen Context</p><h3>Latest OBS / screen frame</h3></div><button id="capture-vision" class="secondary-btn" type="button">Capture</button></div><div id="vision-preview" class="vision-preview">No screen context captured yet.</div><p id="vision-status" class="muted">Use Capture only when you consent to share current screen context.</p></article>
+        <section id="privacy" class="settings-panel module-card" hidden><div class="module-heading"><div><p class="eyebrow">Privacy Center</p><h3>Your data. Your rules.</h3><p class="muted">Nothing is captured without consent. No hardware required for Signal Demo.</p></div><button id="revoke-access" class="secondary-btn" type="button">Revoke access</button></div><p id="presence-privacy" class="muted">Local-first controls</p><div class="privacy-grid"><label><input type="checkbox" data-privacy="microphone"> Microphone consent</label><label><input type="checkbox" data-privacy="camera"> Camera / uploaded image consent</label><label><input type="checkbox" data-privacy="screen"> Screen context</label><label><input type="checkbox" data-privacy="memory"> Memory enabled</label><label><input type="checkbox" data-privacy="localFirst" checked> Local-first mode</label><div class="privacy-note">Consent is enforced per request. Local-first blocks cloud chat, transcription and voice; disable it to use these features.</div></div></section>
+        <article id="system" class="settings-panel module-card" hidden><div class="module-heading"><div><p class="eyebrow">System</p><h3>Health checks and logs</h3></div><button id="refresh-system" class="secondary-btn" type="button">Run checks</button></div><p id="runtime-pill" class="status-pill">Checking runtime…</p><div id="health-grid" class="health-grid"></div><div id="log-list" class="log-list"></div></article>
+        <section id="roadmap" class="settings-panel roadmap-grid" hidden>
         <article class="module-card roadmap-heading"><p class="eyebrow">Roadmap</p><h3>Signal → Face → Vessel</h3><p>Signal includes an initial local Live2D avatar. Creator features and expanded robotics remain later stages.</p></article>
         <article class="module-card"><p class="eyebrow">Now</p><h3>Signal</h3><p>PC/mobile CompanionOS, chat, voice, memory, tasks, privacy, and consent-based context.</p></article>
         <article class="module-card"><p class="eyebrow">Initial slice</p><h3>Face</h3><p>Local Live2D models, playback lip sync, and independent model and voice selections.</p></article>
         <article class="module-card later"><p class="eyebrow">Later</p><h3>Vessel</h3><p>Future robotics embodiment, safe/social design, and expressive hardware.</p></article>
         <article class="module-card later"><p class="eyebrow">Placeholder</p><h3>Wardrobe & skills marketplace (later)</h3><p>Not included in Signal Demo.</p></article>
       </section>
-
-      <article id="system" class="module-card wide-card"><div class="module-heading"><div><p class="eyebrow">System</p><h3>Health checks and logs</h3></div><button id="refresh-system" class="secondary-btn" type="button">Run checks</button></div><div id="health-grid" class="health-grid"></div><div id="log-list" class="log-list"></div></article>
-    </section>
-  </main>
+      </div>
+    </div>
+  </dialog>
   <script src="/avatar-lifecycle.js" defer></script>
   <script src="/live2d-renderer.js" defer></script>
+  <script src="/workspace-navigation.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
 </html>

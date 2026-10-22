@@ -49,7 +49,7 @@ LIVE2D_MODEL_URL="/models/my-companion/my-companion.model3.json"
 
 ## Independent companion model and voice settings
 
-Use the dashboard avatar settings to save the selected profile's model URL, TypeCast voice ID, and optional rig parameter mapping. Changing a model reloads the visible model without changing its selected voice. Changing the voice affects subsequent TypeCast synthesis and voice tests; an existing audio file keeps the voice it was generated with. A TypeCast voice ID must be available to your existing provider account and supported by the configured model.
+Open **Appearance & voice** beneath the avatar or in the settings menu to save the selected profile's model URL, TypeCast voice ID, and optional rig parameter mapping. Changing a model reloads the visible model without changing its selected voice. Changing the voice affects subsequent TypeCast synthesis and voice tests; an existing audio file keeps the voice it was generated with. A TypeCast voice ID must be available to your existing provider account and supported by the configured model.
 
 Presentation settings are separate from the existing identity/profile data and are persisted locally in `data/companion/presentation.json`. Existing saved profiles continue to load. Clearing an override restores the profile/environment fallback. The TypeCast provider credentials stay in their existing configuration and are never copied into presentation settings.
 
@@ -70,7 +70,9 @@ POST is a partial update: omit a field to preserve it, or use `null` to remove i
 
 ## Rigged activity and emotion controls
 
-The renderer consumes the existing lifecycle state. Listening starts with the microphone interaction, thinking covers processing/generation, speaking begins only when the real browser audio emits `playing`, and the terminal lifecycle returns to idle. These states produce different head/gaze/brow poses and breathing/blink behavior. Existing emotions adjust supported face parameters. A model must actually rig the relevant controls for those differences to appear.
+The renderer consumes the existing lifecycle state. Listening starts with the microphone interaction, thinking covers processing/generation, speaking begins only when the real browser audio emits `playing`, and the terminal lifecycle returns to idle. These states produce different head/gaze/brow poses and breathing/blink behavior. Existing emotions adjust supported face parameters. Mouse and pen movement over the canvas adds bounded, smoothed head and eye tracking; leaving the canvas returns gaze toward neutral. Touch input does not drive gaze. A model must actually rig the relevant controls for those differences to appear.
+
+The workspace keeps one canvas, renderer, and media session mounted while settings panels open and close. The existing draw lifecycle adjusts the backing buffer and projection to the canvas's CSS size and device pixel ratio (capped at 2), including after responsive layout changes. Panel navigation does not reload the model or recreate its WebGL context. The composer’s **Interrupt voice** button cancels the active playback owner and immediately closes the mouth.
 
 The semantic aliases accepted in `parameterMap` are:
 

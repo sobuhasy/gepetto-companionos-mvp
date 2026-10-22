@@ -72,6 +72,7 @@ function fixture(options = {}) {
   const canvas = { width: 600, height: 600, clientWidth: 300, clientHeight: 400,
     addEventListener: (event, callback) => listeners.set(event, callback),
     removeEventListener: event => listeners.delete(event),
+    getBoundingClientRect: () => ({ left: 20, top: 30, width: canvas.clientWidth, height: canvas.clientHeight }),
     getContext: () => gl,
   };
   const models = [];
@@ -239,6 +240,65 @@ test('hidden HiDPI canvases retain a bounded backing buffer and resume when visi
     renderer.dispose();
     if (originalRatio === undefined) delete globalThis.devicePixelRatio; else globalThis.devicePixelRatio = originalRatio;
   }
+});
+
+test('viewport and pixel-density changes resize the existing model without reloading resources', async () => {
+  const { renderer, calls, canvas, models, tick } = fixture();
+  const originalRatio = globalThis.devicePixelRatio;
+  try {
+    await renderer.loadModel('/models/authorized/avatar.model3.json');
+    const resource = renderer.resource;
+    const requests = calls.fetched.length;
+    for (const [width, height, ratio] of [[740, 790, 1], [390, 280, 3], [500, 600, 1.25]]) {
+      canvas.clientWidth = width; canvas.clientHeight = height;
+      globalThis.devicePixelRatio = ratio;
+      tick();
+      assert.equal(canvas.width, Math.round(width * Math.min(ratio, 2)));
+      assert.equal(canvas.height, Math.round(height * Math.min(ratio, 2)));
+      assert.equal(renderer.resource, resource);
+    }
+    assert.equal(models.length, 1);
+    assert.equal(calls.fetched.length, requests);
+    assert.equal(calls.released, 0);
+    assert.equal(calls.initialize, 1);
+    assert.equal(calls.drawn, 3);
+  } finally {
+    renderer.dispose();
+    if (originalRatio === undefined) delete globalThis.devicePixelRatio; else globalThis.devicePixelRatio = originalRatio;
+  }
+});
+
+test('cursor tracking stays bounded, preserves expressions and cannot open a stopped mouth', async () => {
+  const { renderer, models, listeners, tick } = fixture();
+  try {
+    await renderer.loadModel('/models/authorized/avatar.model3.json');
+    const move = listeners.get('pointermove');
+    move({ pointerType: 'touch', clientX: 320, clientY: 30 });
+    assert.deepEqual(renderer.pointer, { x: 0, y: 0 }, 'touch gestures do not take over gaze');
+    move({ pointerType: 'mouse', clientX: 5000, clientY: -5000 });
+    assert.deepEqual(renderer.pointer, { x: 1, y: 1 });
+    renderer.setState({ activity: 'idle', emotion: 'love' });
+    renderer.setMouth(1);
+    tick(1000);
+    const values = models[0].model.values;
+    assert.ok(values.get('ParamEyeBallX') > 0 && values.get('ParamEyeBallX') <= 0.65);
+    assert.ok(values.get('ParamEyeBallY') > 0 && values.get('ParamEyeBallY') <= 0.45);
+    assert.equal(values.get('ParamMouthForm'), 0.8, 'tracking preserves the current emotion');
+    assert.equal(values.get('ParamMouthOpenY'), 0, 'a cursor cannot synthesize speech');
+    renderer.setState({ activity: 'speaking', emotion: 'love' }); renderer.setMouth(0.7);
+    tick(1100);
+    assert.equal(values.get('ParamMouthOpenY'), 0.7, 'real playback still controls mouth movement');
+    listeners.get('pointerleave')();
+    assert.deepEqual(renderer.pointer, { x: 0, y: 0 });
+    renderer.setState({ activity: 'idle', emotion: 'neutral' });
+    for (let frame = 1; frame <= 12; frame++) tick(1100 + frame * 100);
+    assert.ok(Math.abs(values.get('ParamEyeBallX')) < 0.001, 'gaze settles back after the cursor leaves');
+    assert.equal(values.get('ParamMouthOpenY'), 0);
+    move({ pointerType: 'pen', clientX: 20, clientY: 430 });
+    listeners.get('pointercancel')();
+    assert.deepEqual(renderer.pointer, { x: 0, y: 0 });
+  } finally { renderer.dispose(); }
+  assert.equal(listeners.size, 0, 'disposing releases pointer and graphics listeners');
 });
 
 test('shader compilation finishes before a model becomes ready or its framework is freed', async () => {

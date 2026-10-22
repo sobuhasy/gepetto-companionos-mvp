@@ -160,6 +160,17 @@
       this.contextLost = false;
       this.resetSdkWhenIdle = false;
       this.resource = null;
+      this.pointer = { x: 0, y: 0 };
+      this.gaze = { x: 0, y: 0 };
+      this.onPointerMove = event => {
+        // Follow a cursor without taking ownership of touch gestures or playback.
+        if (event.pointerType === 'touch' || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return;
+        const bounds = this.canvas.getBoundingClientRect();
+        if (!bounds.width || !bounds.height) return;
+        this.pointer.x = clamp((event.clientX - bounds.left) / bounds.width * 2 - 1, -1, 1);
+        this.pointer.y = clamp(1 - (event.clientY - bounds.top) / bounds.height * 2, -1, 1);
+      };
+      this.onPointerLeave = () => { this.pointer.x = this.pointer.y = 0; };
       this.onLost = event => {
         event.preventDefault();
         this.contextLost = true;
@@ -175,6 +186,9 @@
       };
       canvas.addEventListener('webglcontextlost', this.onLost);
       canvas.addEventListener('webglcontextrestored', this.onRestored);
+      canvas.addEventListener('pointermove', this.onPointerMove);
+      canvas.addEventListener('pointerleave', this.onPointerLeave);
+      canvas.addEventListener('pointercancel', this.onPointerLeave);
     }
     status(status, message, extra = {}) { this.options.onStatus?.({ status, message, ...extra }); }
     setState(state) {
@@ -314,6 +328,13 @@
         if (this.canvas.width !== width || this.canvas.height !== height) { this.canvas.width = width; this.canvas.height = height; }
         model.loadParameters();
         const pose = poseForState(this.state, time / 1000, this.mouth);
+        const follow = 1 - Math.exp(-dt * 10);
+        this.gaze.x += (this.pointer.x - this.gaze.x) * follow;
+        this.gaze.y += (this.pointer.y - this.gaze.y) * follow;
+        pose.angleX += this.gaze.x * 8;
+        pose.angleY += this.gaze.y * 5;
+        pose.eyeBallX = clamp(pose.eyeBallX + this.gaze.x * 0.65, -1, 1);
+        pose.eyeBallY = clamp(pose.eyeBallY + this.gaze.y * 0.45, -1, 1);
         driver.apply(pose);
         resource.physics?.evaluate(model, dt);
         resource.pose?.updateParameters(model, dt);
@@ -372,6 +393,9 @@
       this.unload();
       this.canvas.removeEventListener('webglcontextlost', this.onLost);
       this.canvas.removeEventListener('webglcontextrestored', this.onRestored);
+      this.canvas.removeEventListener('pointermove', this.onPointerMove);
+      this.canvas.removeEventListener('pointerleave', this.onPointerLeave);
+      this.canvas.removeEventListener('pointercancel', this.onPointerLeave);
       if (!this.loading) this.releaseSdk();
     }
   }
