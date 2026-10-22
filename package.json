@@ -17,6 +17,8 @@
   "main": "dist/index/index.js",
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --test tests/*.test.cjs",
+    "setup:live2d": "node scripts/setup-live2d.cjs",
     "start": "node dist/web/server.js",
     "dev": "ts-node source/index/index.ts",
     "start:web": "node dist/web/server.js",
@@ -50,6 +52,7 @@
     "@types/node-windows": "^0.1.6",
     "@types/serialport": "^8.0.5",
     "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }

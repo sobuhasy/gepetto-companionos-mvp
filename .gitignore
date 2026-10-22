@@ -14,3 +14,18 @@ Thumbs.db
 data/ltm/memories.jsonl
 data/companion/generated-profile.json
 data/dashboard/tasks.json
+
+# User-installed official Live2D runtime and authorized private model assets.
+/Live2DModels/
+# Personal models stay private even if moved to another directory.
+**/Black_Cat_Girl/
+**/BlackWolfGirl- Drag To Model Folder/
+**/CustomCatGirl-DragToModelFolder/
+source/web/public/live2d/
+source/web/public/.live2d-setup-*/
+data/live2d/
+data/companion/presentation.json
+.live2d-sdk/
+vendor/live2d/
+/CubismSdkForWeb*/
+/CubismSDKForWeb*/

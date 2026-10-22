@@ -300,8 +300,8 @@ export class TtsTypeCast implements TTS {
         await this.generateWithResult(text, voiceId);
     }
 
-    public async generateTest(): Promise<TypeCastGenerationResult | undefined> {
-        return this.generateWithResult(SELF_TEST_TEXT);
+    public async generateTest(voiceId?: string): Promise<TypeCastGenerationResult | undefined> {
+        return this.generateWithResult(SELF_TEST_TEXT, voiceId);
     }
 
     public async generateWithResult(text: string, voiceId?: string): Promise<TypeCastGenerationResult | undefined> {
@@ -316,7 +316,7 @@ export class TtsTypeCast implements TTS {
         }
 
         const model = process.env['TYPECAST_MODEL']?.trim() || DEFAULT_MODEL;
-        const selectedVoiceId = process.env['COMPANION_VOICE_ID']?.trim() || voiceId?.trim() || this.defaultVoiceId;
+        const selectedVoiceId = voiceId?.trim() || process.env['COMPANION_VOICE_ID']?.trim() || this.defaultVoiceId;
         const prompt = configuredPrompt(model);
         const baseRequest: TTSRequest = {
             text: spokenText,

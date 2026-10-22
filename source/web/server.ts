@@ -15,6 +15,9 @@ import { COMPANION_MODES } from '../companion/GeneratedCompanionProfile';
 import { getSafeTypeCastErrorMessage } from '../tts/TtsTypeCast';
 import type { CompanionIdentityGeneratorInput } from '../companion/CompanionIdentityGenerator';
 import type { GeneratedCompanionProfile } from '../companion/GeneratedCompanionProfile';
+import { CompanionPresentationStore, isPresentationFallbackId, PresentationValidationError } from '../companion/CompanionPresentation';
+import { toBodyBackend } from '../body/BodyFactory';
+import { readLocalAvatarAsset } from './LocalAvatarAssets';
 
 const DEFAULT_PORT = 3000;
 const PORT = Number(process.env['PORT'] ?? DEFAULT_PORT);
@@ -29,6 +32,7 @@ const OBS_SOURCE_NAME = process.env['OBS_SOURCE_NAME'] ?? 'Display Capture';
 const OBS_SOURCE_LABEL = `OBS ${OBS_SOURCE_NAME}`;
 const healthService = new SystemHealthService();
 const app = new AetherialApp();
+const presentationStore = new CompanionPresentationStore();
 let isReady = false;
 let initialization: Promise<void> | undefined;
 let voiceTestBusy = false;
@@ -120,6 +124,12 @@ const contentTypes: Record<string, string> = {
     '.mp3': 'audio/mpeg',
     '.ogg': 'audio/ogg',
     '.webm': 'audio/webm',
+    '.png': 'image/png',
+    '.moc3': 'application/octet-stream',
+    '.wasm': 'application/wasm',
+    '.vert': 'text/plain; charset=utf-8',
+    '.frag': 'text/plain; charset=utf-8',
+    '.glsl': 'text/plain; charset=utf-8',
 };
 
 function addLog(level: DashboardLogEntry['level'], message: string): void {
@@ -176,6 +186,15 @@ function isStringArray(value: unknown): value is string[] {
 
 function isModeInstructionRecord(value: unknown): boolean {
     return isRecord(value) && COMPANION_MODES.every((mode) => hasStringField(value, mode));
+}
+
+function presentationModeInput(value: unknown): string | undefined {
+    if (value === undefined || value === null) return undefined;
+    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    if (![...COMPANION_MODES, 'eve', 'lyriel', 'rea'].includes(normalized)) {
+        throw new PresentationValidationError('companionMode must be a supported companion mode.');
+    }
+    return normalized;
 }
 
 function isGeneratedCompanionProfile(value: unknown): value is GeneratedCompanionProfile {
@@ -516,6 +535,39 @@ async function handleCompanionProfile(req: IncomingMessage, res: ServerResponse)
     }
 
     try {
+        if (pathname === '/api/companion/presentation') {
+            const url = new URL(req.url ?? '/', 'http://localhost');
+            const profile = await getCurrentGeneratedProfile();
+            let modeInput = presentationModeInput(url.searchParams.get('companionMode'));
+            let profileId = url.searchParams.get('profileId') ?? profile.id;
+            if (req.method === 'POST') {
+                const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+                if (!local || (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`)) {
+                    respondJson(res, 403, { error: 'Presentation changes require a local same-origin client.' });
+                    return true;
+                }
+                const body = await parseBody(req);
+                if ('companionMode' in body) modeInput = presentationModeInput(body['companionMode']);
+                if (body['profileId'] !== undefined && typeof body['profileId'] !== 'string') {
+                    throw new PresentationValidationError('profileId must be a string.');
+                }
+                profileId = typeof body['profileId'] === 'string' ? body['profileId'] : profile.id;
+                if (profileId !== profile.id && !isPresentationFallbackId(profileId)) {
+                    throw new PresentationValidationError('Select the current companion profile or a known mode/legacy fallback.');
+                }
+                await presentationStore.update(profileId, body);
+            } else if (req.method !== 'GET') {
+                respondJson(res, 405, { error: 'Method not allowed.' });
+                return true;
+            }
+            if (profileId !== profile.id && !isPresentationFallbackId(profileId)) {
+                throw new PresentationValidationError('Select the current companion profile or a known mode/legacy fallback.');
+            }
+            const mode = toCompanionMode(modeInput ?? (isPresentationFallbackId(profileId) ? profileId.split(':')[1] : undefined));
+            respondJson(res, 200, { ...await presentationStore.get(profileId, mode), backend: toBodyBackend(process.env['ROBOT_BODY_BACKEND']) });
+            return true;
+        }
+
         if (pathname === '/api/companion/profile' && req.method === 'GET') {
             respondJson(res, 200, await getCurrentGeneratedProfile());
             return true;
@@ -543,6 +595,10 @@ async function handleCompanionProfile(req: IncomingMessage, res: ServerResponse)
             return true;
         }
     } catch (error) {
+        if (error instanceof PresentationValidationError || error instanceof SyntaxError) {
+            respondJson(res, 400, { error: error instanceof SyntaxError ? 'Malformed JSON.' : error.message });
+            return true;
+        }
         console.error('Failed to handle companion profile request:', error);
         addLog('error', 'Generated companion profile request failed.');
         respondJson(res, 500, { error: 'Failed to handle generated companion profile request.' });
@@ -570,6 +626,11 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
     if (path === '/api/vision' || path === '/api/vision/capture') requireConsent(consent.screen, 'Screen consent is required.');
     if (path === '/api/transcribe') requireConsent(consent.microphone, 'Microphone consent is required.');
     if (['/api/message', '/api/transcribe', '/api/voice/test'].includes(path)) requireCloudConsent(consent);
+
+    if (path === '/api/avatar' && req.method === 'GET') {
+        respondJson(res, 200, { avatar: app.avatar.current, avatarBackend: toBodyBackend(process.env['ROBOT_BODY_BACKEND']) });
+        return true;
+    }
 
     if (path === '/api/avatar' && req.method === 'POST') {
         const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
@@ -617,7 +678,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
 
     if (req.url === '/api/status' && req.method === 'GET') {
         const health = await healthService.check(isReady);
-        respondJson(res, 200, { online: true, ready: isReady, avatar: app.avatar.current, health, logs: eventLog });
+        respondJson(res, 200, { online: true, ready: isReady, avatar: app.avatar.current, avatarBackend: toBodyBackend(process.env['ROBOT_BODY_BACKEND']), health, logs: eventLog });
         return true;
     }
 
@@ -630,17 +691,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
         voiceTestBusy = true;
         try {
             await ensureInitialized();
-            const result = await app.generateVoiceTest(consent);
+            const profile = await getCurrentGeneratedProfile();
+            const mode = toCompanionMode(body['companionMode'] ?? body['mode']);
+            const result = await app.generateVoiceTest(consent, profile.id, mode);
             if (interactionId && !app.avatar.preparePlayback(interactionId)) throw new Error('Voice test cancelled');
             const message = 'Voice test generated.';
             addLog('info', `${message}${result.retriedWithoutPrompt ? ' Retry without prompt was used.' : ''}`);
-            respondJson(res, 200, { success: true, message, audioUrl: result.audioUrl });
+            respondJson(res, 200, { success: true, message, audioUrl: result.audioUrl, avatar: app.avatar.current });
             return true;
         } catch (error) {
             if (interactionId) await app.avatar.reset(interactionId);
             const safeError = getSafeTypeCastErrorMessage(error);
             addLog('warn', `Voice test failed: ${safeError}`);
-            respondJson(res, 200, { success: false, error: safeError });
+            respondJson(res, 200, { success: false, error: safeError, avatar: app.avatar.current });
             return true;
         } finally { voiceTestBusy = false; }
     }
@@ -699,7 +762,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
             }
             const result = await app.interact(prompt, 'text', image, mode, companionProfile, requestScreenContext, consent, interactionId, body['audioEnabled'] !== false);
             addLog(result.success ? 'info' : 'warn', `Chat interaction ${result.success ? 'completed' : 'failed'} in ${mode} mode.`);
-            respondJson(res, 200, { ...result, mode });
+            respondJson(res, 200, { ...result, mode, avatar: app.avatar.current });
             return true;
         } catch (error) {
             if (error instanceof ConsentError) { respondJson(res, 403, { error: error.message }); return true; }
@@ -715,6 +778,21 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const requestPath = new URL(req.url ?? '/index.html', 'http://localhost').pathname;
+    const assetPrefix = requestPath.startsWith('/models/') ? '/models/' : requestPath.startsWith('/live2d/') ? '/live2d/' : undefined;
+    if (assetPrefix) {
+        try {
+            const root = assetPrefix === '/models/'
+                ? process.env['LIVE2D_MODELS_DIR'] || join(process.cwd(), 'data', 'live2d', 'models')
+                : join(PUBLIC_DIR, 'live2d');
+            const asset = await readLocalAvatarAsset(root, requestPath.slice(assetPrefix.length), assetPrefix === '/models/' ? 'model' : 'sdk');
+            res.writeHead(200, { 'Content-Type': asset.plainText ? 'text/plain; charset=utf-8' : contentTypes[asset.extension] ?? 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store' });
+            res.end(asset.data);
+        } catch {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end('Avatar asset not found.');
+        }
+        return;
+    }
     const requested = requestPath === '/' ? '/index.html' : requestPath;
     const safePath = normalize(requested).replace(/^(\.\.(\/|\\|$))+/, '');
     const filePath = join(PUBLIC_DIR, safePath);

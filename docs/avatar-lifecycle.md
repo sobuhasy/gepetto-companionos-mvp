@@ -44,6 +44,8 @@ node --test tests/*.test.cjs
 
 The tests use mocked bodies, LLM/TTS, bridge calls, and browser audio events. They cover the full speech sequence, text-only and audio-disabled replies, TTS failure, playback rejection/error/pause, interruption, overlapping work, stale audio events, disconnected VTube with a Hybrid sibling, shutdown during processing, expressions changing while speaking, and lease expiration. Existing P0 tests also exercise HTTP consent gates, stale avatar events, foreign-origin rejection, and idle status. No VTube installation or paid API requests are needed.
 
+For the default native browser renderer, follow [native Live2D setup and manual checks](native-live2d.md). The VTube-specific behavior and instructions below apply only when selecting `vtube` or `hybrid`.
+
 ## Manual VTube Studio test
 
 1. Start VTube Studio with the same working model and API port 8001. Keep its plugin API enabled and retain the existing authorization token. Do not delete or regenerate the token. Keep the existing VB-Audio/VTube microphone routing for lip sync.

@@ -1,6 +1,7 @@
 import { promisify } from "node:util";
 import { exec as execCb } from "node:child_process";
 import net from "node:net";
+import { toBodyBackend } from '../body/BodyFactory';
 
 const exec = promisify(execCb);
 
@@ -20,11 +21,13 @@ export type SystemHealthReport = {
 
 export class SystemHealthService {
     public async check(webGuiReady: boolean): Promise<SystemHealthReport> {
+        const backend = toBodyBackend(process.env['ROBOT_BODY_BACKEND']);
         const [ttsBackup, microphone, obsVision, vtubeStudio, openClaw] = await Promise.all([
             this.checkCommand("tts --help"),
             this.checkCommand("sox --version"),
             this.checkTcpPort("127.0.0.1", 4455),
-            this.checkTcpPort("127.0.0.1", 8001),
+            backend === 'vtube' || backend === 'hybrid'
+                ? this.checkTcpPort("127.0.0.1", 8001) : Promise.resolve<HealthStatus>('unknown'),
             this.checkOpenClaw(),
         ]);
 

@@ -20,6 +20,7 @@
       <nav class="module-nav">
         <a href="#home"><i class="fa-solid fa-house"></i><span>Home</span></a>
         <a href="#identity"><i class="fa-solid fa-fingerprint"></i><span>Identity</span></a>
+        <a href="#avatar"><i class="fa-solid fa-user"></i><span>Avatar</span></a>
         <a href="#modes"><i class="fa-solid fa-layer-group"></i><span>Modes</span></a>
         <a href="#memory"><i class="fa-solid fa-brain"></i><span>Memory</span></a>
         <a href="#tasks"><i class="fa-solid fa-list-check"></i><span>Plan</span></a>
@@ -99,6 +100,31 @@
         </form>
       </section>
 
+      <section id="avatar" class="module-card">
+        <div class="module-heading">
+          <div><p class="eyebrow">Live2D Avatar</p><h3>Your companion, locally rendered</h3></div>
+          <span id="avatar-state" class="module-tag">Idle · neutral</span>
+        </div>
+        <div class="live2d-layout">
+          <div class="live2d-stage">
+            <canvas id="live2d-canvas" width="600" height="600" role="img" aria-label="Animated companion avatar"></canvas>
+            <p id="avatar-render-status" role="status">Choose an authorized local model to show your companion.</p>
+          </div>
+          <form id="avatar-settings" class="avatar-settings">
+            <label>Local model URL<input id="avatar-model-url" type="text" placeholder="/models/my-companion/companion.model3.json" spellcheck="false"></label>
+            <label>TypeCast voice ID<input id="avatar-voice-id" type="text" placeholder="Leave blank to use your configured voice" spellcheck="false"></label>
+            <details>
+              <summary>Custom rig parameter names</summary>
+              <label>Parameter mapping (JSON)<textarea id="avatar-parameter-map" rows="5" placeholder='{"mouthOpen":"ParamMouthOpenY","angleX":"ParamAngleX"}' spellcheck="false">{}</textarea></label>
+              <p class="muted">Map only the controls your rig renames. Standard Cubism parameters and model lip-sync groups work automatically.</p>
+            </details>
+            <button id="save-avatar-settings" class="secondary-btn" type="submit">Save model and voice</button>
+            <p id="avatar-settings-status" class="muted" role="status">Settings belong to this companion profile.</p>
+            <p class="muted">Install the official Cubism SDK and place a model you have permission to use in your local model folder. See <a href="https://www.live2d.com/en/sdk/download/web/" target="_blank" rel="noreferrer">official SDK download</a> and the repository’s docs/native-live2d.md for setup. Model files stay on this computer. Voice generation still follows your privacy settings.</p>
+          </form>
+        </div>
+      </section>
+
       <section id="modes" class="module-card">
         <div class="module-heading">
           <div><p class="eyebrow">One Companion, Many Modes</p><h3>Switch the same identity into the right working state.</h3></div>
@@ -141,9 +167,9 @@
       <section id="privacy" class="module-card"><div class="module-heading"><div><p class="eyebrow">Privacy Center</p><h3>Your data. Your rules.</h3><p class="muted">Nothing is captured without consent. No hardware required for Signal Demo.</p></div><button id="revoke-access" class="secondary-btn" type="button">Revoke access</button></div><div class="privacy-grid"><label><input type="checkbox" data-privacy="microphone"> Microphone consent</label><label><input type="checkbox" data-privacy="camera"> Camera / uploaded image consent</label><label><input type="checkbox" data-privacy="screen"> Screen context</label><label><input type="checkbox" data-privacy="memory"> Memory enabled</label><label><input type="checkbox" data-privacy="localFirst" checked> Local-first mode</label><div class="privacy-note">Consent is enforced per request. Local-first blocks cloud chat, transcription and voice; disable it to use these features.</div></div></section>
 
       <section id="roadmap" class="roadmap-grid">
-        <article class="module-card roadmap-heading"><p class="eyebrow">Roadmap</p><h3>Signal → Face → Vessel</h3><p>Signal is the current MVP. Face and Vessel are later stages, not part of the Signal Demo.</p></article>
+        <article class="module-card roadmap-heading"><p class="eyebrow">Roadmap</p><h3>Signal → Face → Vessel</h3><p>Signal includes an initial local Live2D avatar. Creator features and expanded robotics remain later stages.</p></article>
         <article class="module-card"><p class="eyebrow">Now</p><h3>Signal</h3><p>PC/mobile CompanionOS, chat, voice, memory, tasks, privacy, and consent-based context.</p></article>
-        <article class="module-card later"><p class="eyebrow">Later</p><h3>Face</h3><p>Avatar, voice, customization, and creator ecosystem for companion expression.</p></article>
+        <article class="module-card"><p class="eyebrow">Initial slice</p><h3>Face</h3><p>Local Live2D models, playback lip sync, and independent model and voice selections.</p></article>
         <article class="module-card later"><p class="eyebrow">Later</p><h3>Vessel</h3><p>Future robotics embodiment, safe/social design, and expressive hardware.</p></article>
         <article class="module-card later"><p class="eyebrow">Placeholder</p><h3>Wardrobe & skills marketplace (later)</h3><p>Not included in Signal Demo.</p></article>
       </section>
@@ -152,6 +178,7 @@
     </section>
   </main>
   <script src="/avatar-lifecycle.js" defer></script>
+  <script src="/live2d-renderer.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
 </html>

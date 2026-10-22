@@ -237,9 +237,103 @@ async function fetchJson(url, options = {}) {
 
 let recordedInteractionId = null;
 let recordingCancelled = false;
+const avatarStateLabel = document.getElementById('avatar-state');
+const avatarRenderStatus = document.getElementById('avatar-render-status');
+const avatarSettingsStatus = document.getElementById('avatar-settings-status');
+const avatarModelInput = document.getElementById('avatar-model-url');
+const avatarVoiceInput = document.getElementById('avatar-voice-id');
+const avatarParameterInput = document.getElementById('avatar-parameter-map');
+let avatarStateVersion = 0;
+let presentationGeneration = 0;
+let renderedPresentation = null;
+let avatarPageClosed = false;
+let avatarResponsePending = false;
+const nativeRenderer = new NativeLive2DRenderer(document.getElementById('live2d-canvas'), {
+  onStatus({ status, message, missingParameters = [] }) {
+    avatarRenderStatus.textContent = message;
+    avatarRenderStatus.dataset.status = status;
+    if (status === 'ready' && missingParameters.length) {
+      avatarRenderStatus.textContent += ` Rig controls not found: ${missingParameters.join(', ')}. Customize parameter names if needed.`;
+    }
+  },
+});
 const avatarMedia = new AvatarMediaSession(body => fetchJson('/api/avatar', {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-}));
+}), undefined, {
+  onState(avatar) {
+    ++avatarStateVersion;
+    nativeRenderer.setState(avatar);
+    avatarStateLabel.textContent = `${avatar.activity} · ${avatar.emotion}`;
+  },
+  onMouth: level => nativeRenderer.setMouth(level),
+});
+
+function observeAvatarState(avatar) {
+  // A text-only response resets the server owner before its HTTP reply arrives.
+  // Show that idle state without discarding the reply still in transit.
+  if (avatarResponsePending && avatar?.activity === 'idle' && !avatarMedia.audio) avatarMedia.notifyState(avatar);
+  else avatarMedia.observe(avatar);
+}
+
+async function applyPresentation(presentation) {
+  avatarModelInput.value = presentation.modelUrl || '';
+  avatarVoiceInput.value = presentation.voiceId || '';
+  avatarParameterInput.value = JSON.stringify(presentation.parameterMap || {}, null, 2);
+  avatarSettingsStatus.textContent = `Saved for this companion · ${presentation.backend} backend. Voice and model are independent.`;
+  const key = JSON.stringify([presentation.modelUrl, presentation.parameterMap, presentation.backend]);
+  if (renderedPresentation === key) return;
+  renderedPresentation = key;
+  if (['vtube', 'hybrid'].includes(presentation.backend)) {
+    await nativeRenderer.loadModel(null);
+    avatarRenderStatus.textContent = `The ${presentation.backend} backend uses VTube Studio. Select the native backend at startup to render here.`;
+    return;
+  }
+  try { await nativeRenderer.loadModel(presentation.modelUrl, presentation.parameterMap || {}); }
+  catch { renderedPresentation = null; /* The renderer displays the actionable load error. */ }
+}
+
+async function loadPresentation() {
+  const generation = ++presentationGeneration;
+  const presentation = await fetchJson(`/api/companion/presentation?companionMode=${encodeURIComponent(activeMode)}`);
+  if (avatarPageClosed || generation !== presentationGeneration || presentation.profileId !== companionProfile.id) return;
+  await applyPresentation(presentation);
+}
+
+document.getElementById('avatar-settings').addEventListener('submit', async event => {
+  event.preventDefault();
+  const saveButton = document.getElementById('save-avatar-settings');
+  saveButton.disabled = true;
+  const generation = ++presentationGeneration;
+  const profileId = companionProfile.id;
+  const mode = activeMode;
+  try {
+    const parameterMap = JSON.parse(avatarParameterInput.value || '{}');
+    const selection = { profileId, modelUrl: avatarModelInput.value.trim() || null,
+      voiceId: avatarVoiceInput.value.trim() || null, parameterMap, companionMode: mode };
+    recordingCancelled = true;
+    if (isRecording && mediaRecorder) mediaRecorder.stop();
+    await avatarMedia.cancel();
+    const presentation = await fetchJson('/api/companion/presentation', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(selection),
+    });
+    if (avatarPageClosed || generation !== presentationGeneration || profileId !== companionProfile.id || mode !== activeMode) return;
+    await applyPresentation(presentation);
+  } catch (error) { if (generation === presentationGeneration) avatarSettingsStatus.textContent = error.message; }
+  finally { saveButton.disabled = false; }
+});
+
+let avatarPolling = false;
+const avatarPollTimer = setInterval(async () => {
+  if (avatarPolling || avatarPageClosed) return;
+  avatarPolling = true;
+  const version = avatarStateVersion;
+  try {
+    const payload = await fetchJson('/api/avatar');
+    if (!avatarPageClosed && version === avatarStateVersion) observeAvatarState(payload.avatar);
+  } catch { nativeRenderer.setMouth(0); }
+  finally { avatarPolling = false; }
+}, 1000);
 const stopVoiceButton = document.createElement('button');
 stopVoiceButton.type = 'button';
 stopVoiceButton.className = 'secondary-btn';
@@ -254,11 +348,19 @@ autoPlayToggle.addEventListener('change', () => {
   if (!autoPlayToggle.checked) avatarMedia.cancel().catch(() => {});
 });
 window.addEventListener('pagehide', () => {
+  avatarPageClosed = true;
+  clearInterval(avatarPollTimer);
   if (avatarMedia.id) fetch('/api/avatar', {
     method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ event: 'cancel', interactionId: avatarMedia.id }),
   }).catch(() => {});
+  recordingCancelled = true;
+  if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+  mediaRecorder?.stream?.getTracks().forEach(track => track.stop());
+  avatarMedia.dispose().catch(() => {});
+  nativeRenderer.dispose();
 });
+window.addEventListener('pageshow', event => { if (event.persisted && avatarPageClosed) window.location.reload(); });
 
 async function transcribeAudioBlob(audioBlob) {
   const dataUrl = await new Promise((resolve, reject) => {
@@ -371,7 +473,9 @@ async function toggleRecording() {
 }
 
 async function loadSystemStatus() {
+  const version = avatarStateVersion;
   const payload = await fetchJson('/api/status');
+  if (!avatarPageClosed && version === avatarStateVersion) observeAvatarState(payload.avatar);
   const readyText = payload.ready ? 'Runtime ready' : 'Runtime warms on first chat';
   runtimePill.textContent = readyText;
   runtimePill.className = `status-pill ${payload.ready ? 'good' : 'warn'}`;
@@ -520,15 +624,17 @@ if (micButton) {
 sttReadyToggle.addEventListener('change', () => setControlsDisabled(false));
 voiceTestButton.addEventListener('click', async () => {
   voiceTestButton.disabled = true;
+  avatarResponsePending = true;
   let interactionId;
   try {
     interactionId = await avatarMedia.begin('thinking');
     const payload = await fetchJson('/api/voice/test', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ interactionId }),
+      body: JSON.stringify({ interactionId, companionMode: activeMode }),
     });
     if (!payload.success) throw new Error(payload.error ?? 'TypeCast voice test failed.');
     if (avatarMedia.id !== interactionId) return;
+    if (payload.avatar) avatarMedia.observe(payload.avatar);
     if (!payload.audioUrl || !(await avatarMedia.play(`${payload.audioUrl}?t=${Date.now()}`))) {
       throw new Error('Browser playback failed. Check audio output routing.');
     }
@@ -537,6 +643,7 @@ voiceTestButton.addEventListener('click', async () => {
     if (interactionId) await avatarMedia.finish('error', interactionId).catch(() => {});
     addMessage('companion', `Voice test failed: ${error.message}`);
   } finally {
+    avatarResponsePending = false;
     voiceTestButton.disabled = false;
   }
 });
@@ -630,6 +737,7 @@ form.addEventListener('submit', async (event) => {
   setControlsDisabled(true);
 
   let interactionId;
+  avatarResponsePending = true;
   try {
     interactionId = recordedInteractionId ?? await avatarMedia.begin('thinking');
     recordedInteractionId = null;
@@ -647,6 +755,7 @@ form.addEventListener('submit', async (event) => {
     });
 
     if (avatarMedia.id !== interactionId) return;
+    if (payload.avatar) avatarMedia.observe(payload.avatar);
     if (autoPlayToggle.checked && payload.spokenText && payload.audioUrl) {
       if (!(await avatarMedia.play(`${payload.audioUrl}?t=${Date.now()}`))) {
         addMessage('companion', 'I answered, but audio playback failed. Check voice output routing.');
@@ -661,6 +770,7 @@ form.addEventListener('submit', async (event) => {
     if (interactionId) await avatarMedia.finish('error', interactionId).catch(() => {});
     addMessage('companion', `Network error: ${error.message}`);
   } finally {
+    avatarResponsePending = false;
     setControlsDisabled(false);
     promptInput.focus();
   }
@@ -770,6 +880,7 @@ async function loadCompanionProfile() {
   storeCompanionProfile(profile);
   renderProfile(profile);
   setProfileStatus('Profile ready', 'good');
+  await loadPresentation();
 }
 
 function buildGeneratorInput() {
@@ -796,6 +907,7 @@ async function generateCompanion() {
     storeCompanionProfile(profile);
     renderProfile(profile);
     setProfileStatus('Generated and saved', 'good');
+    await loadPresentation();
   } catch (error) {
     setProfileStatus(error.message, 'bad');
   } finally {
@@ -815,6 +927,7 @@ async function saveCompanion() {
     storeCompanionProfile(profile);
     renderProfile(profile);
     setProfileStatus('Saved', 'good');
+    await loadPresentation();
   } catch (error) {
     setProfileStatus(error.message, 'bad');
   } finally {
@@ -823,6 +936,7 @@ async function saveCompanion() {
 }
 
 function setActiveMode(mode) {
+  const previousMode = activeMode;
   activeMode = modeConfigs[mode] ? mode : 'productivity';
   const config = modeConfigs[activeMode];
   if (companionMode) companionMode.value = activeMode;
@@ -832,6 +946,7 @@ function setActiveMode(mode) {
     const companionName = companionProfile?.shortName || companionProfile?.name || 'Your companion';
     modeAdaptationText.textContent = `${companionName} is adapting to ${config.label}. Same companion, focused behavior.`;
   }
+  if (previousMode !== activeMode) loadPresentation().catch(error => { avatarSettingsStatus.textContent = error.message; });
 }
 
 function loadPrivacyControls() {
@@ -852,6 +967,10 @@ function loadPrivacyControls() {
       }
       if (input.dataset.privacy === 'localFirst' && presencePrivacy) {
         presencePrivacy.textContent = input.checked ? 'Local-first controls' : 'Cloud features require consent';
+        if (input.checked) {
+          recordingCancelled = true;
+          avatarMedia.cancel().catch(() => {});
+        }
       }
     });
   });
@@ -861,6 +980,8 @@ profileForm?.addEventListener('submit', (event) => event.preventDefault());
 generateCompanionButton?.addEventListener('click', generateCompanion);
 saveCompanionButton?.addEventListener('click', saveCompanion);
 revokeAccessButton?.addEventListener('click', () => {
+  recordingCancelled = true;
+  avatarMedia.cancel().catch(() => {});
   document.querySelectorAll('[data-privacy]').forEach((input) => {
     input.checked = input.dataset.privacy === 'localFirst';
     localStorage.setItem(`gepetto-privacy-${input.dataset.privacy}`, String(input.checked));

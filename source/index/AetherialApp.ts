@@ -10,12 +10,13 @@ import { getSafeTypeCastErrorMessage, TtsTypeCast } from "../tts/TtsTypeCast";
 import type { TypeCastGenerationResult } from "../tts/TtsTypeCast";
 import { MicWhisper } from "../stt/MicWhisper";
 import { RobotBody } from "../body/RobotBody";
-import { BodyBackend, createRobotBody } from "../body/BodyFactory";
+import { createRobotBody, toBodyBackend } from "../body/BodyFactory";
 import { ObsVision } from '../module/ObsVision';
 import { TtsCoqui } from '../tts/TtsCoqui';
 import { getCompanionProfile, normalizeCompanionMode } from '../companion/CompanionProfile';
 import { CompanionPromptService } from '../companion/CompanionPromptService';
 import type { GeneratedCompanionProfile } from '../companion/GeneratedCompanionProfile';
+import { CompanionPresentationStore } from '../companion/CompanionPresentation';
 
 export type InteractionMode = 'text' | 'speech';
 
@@ -295,19 +296,12 @@ function isEnabled(value: string | undefined): boolean {
     return value?.trim().toLowerCase() === 'true';
 }
 
-function toBodyBackend(value: unknown): BodyBackend {
-    if (value === "pico" || value === "hybrid" || value === "vtube") {
-        return value;
-    }
-
-    return "vtube";
-}
-
 export class AetherialApp {
     private eveBrain?: LlmProvider;
     private readonly memory = new JsonLongTermMemory();
 
-    constructor(private readonly modelFactory: () => LlmProvider = () => new LlmOpenAI()) {}
+    constructor(private readonly modelFactory: () => LlmProvider = () => new LlmOpenAI(),
+        private readonly presentation = new CompanionPresentationStore()) {}
     private eveVoice?: TtsTypeCast;
     private eveVoiceBackup?: TtsCoqui;
     private eveEars?: MicWhisper;
@@ -355,7 +349,7 @@ export class AetherialApp {
         this.eveVoice = new TtsTypeCast();
         this.eveVoiceBackup = new TtsCoqui();
         this.eveEars = new MicWhisper();
-        const bodyBackend = toBodyBackend(process.env["ROBOT_BODY_BACKEND"] ?? "vtube");
+        const bodyBackend = toBodyBackend(process.env["ROBOT_BODY_BACKEND"]);
         this.eveBody = createRobotBody(bodyBackend);
         this.eveEyes = new ObsVision();
 
@@ -435,9 +429,10 @@ export class AetherialApp {
         await this.avatar.emotion(interactionId, emotion, eveResponse.expressionDurationMs);
 
         const routeProfile = getCompanionProfile(companionMode);
+        const presentation = await this.presentation.get(generatedProfile?.id ?? `mode:${companionMode}`, companionMode);
 
         const spokenText = eveResponse.speak && audioEnabled
-            ? await this.generateVoiceForVisibleReply(visibleText, routeProfile.voiceId)
+            ? await this.generateVoiceForVisibleReply(visibleText, presentation.voiceId ?? undefined)
             : undefined;
         
 
@@ -462,7 +457,7 @@ export class AetherialApp {
         return this.requireEyes().captureScreen();
     }
 
-    async generateVoiceTest(consent: ConsentState = DEFAULT_CONSENT): Promise<TypeCastGenerationResult> {
+    async generateVoiceTest(consent: ConsentState = DEFAULT_CONSENT, profileId = 'mode:productivity', companionMode?: string): Promise<TypeCastGenerationResult> {
         requireCloudConsent(consent);
         if (!this.initialized) {
             throw new Error('AetherialApp not initialized');
@@ -471,7 +466,8 @@ export class AetherialApp {
             throw new Error('Companion voice is disabled by COMPANION_VOICE_ENABLED.');
         }
 
-        const result = await this.requireVoice().generateTest();
+        const selected = await this.presentation.get(profileId, companionMode);
+        const result = await this.requireVoice().generateTest(selected.voiceId ?? undefined);
         if (!result) {
             throw new Error('Voice test text was empty after sanitization.');
         }
@@ -487,6 +483,7 @@ export class AetherialApp {
         await this.avatar.shutdown();
         await Promise.allSettled([
             this.requireBrain().free(), this.requireVoice().free(), this.requireBackupVoice().free(),
+            this.eveEyes?.free(),
         ]);
     }
 
@@ -496,7 +493,7 @@ export class AetherialApp {
         }
 
         const localFallbackText = this.toSpeechPreview(text);
-        const selectedVoiceId = process.env["COMPANION_VOICE_ID"] ?? voiceId;
+        const selectedVoiceId = voiceId ?? process.env["COMPANION_VOICE_ID"];
 
         try {
             const result = await this.requireVoice().generateWithResult(text, selectedVoiceId);
