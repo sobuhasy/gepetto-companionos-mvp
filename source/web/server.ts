@@ -18,6 +18,13 @@ import type { GeneratedCompanionProfile } from '../companion/GeneratedCompanionP
 import { CompanionPresentationStore, isPresentationFallbackId, PresentationValidationError } from '../companion/CompanionPresentation';
 import { toBodyBackend } from '../body/BodyFactory';
 import { readLocalAvatarAsset } from './LocalAvatarAssets';
+import { StudyError, StudyService } from '../study/StudyService';
+import { StudyRecordStore } from '../study/StudyRecordStore';
+import { SkillActionRouter } from '../actions/SkillActionRouter';
+import { TaskStore } from '../tasks/TaskStore';
+import type { DashboardTask } from '../tasks/TaskStore';
+import type { ConsentState } from '../privacy/ConsentState';
+import { studyExpression } from '../body/StudyExpression';
 
 const DEFAULT_PORT = 3000;
 const PORT = Number(process.env['PORT'] ?? DEFAULT_PORT);
@@ -47,15 +54,6 @@ type DashboardLogEntry = {
     id: string;
     level: 'info' | 'warn' | 'error';
     message: string;
-    createdAt: string;
-};
-
-type DashboardTask = {
-    id: string;
-    title: string;
-    kind: 'startup' | 'study' | 'workflow' | 'project';
-    details: string;
-    done: boolean;
     createdAt: string;
 };
 
@@ -114,6 +112,34 @@ const defaultTasks: DashboardTask[] = [
         createdAt: new Date(0).toISOString(),
     },
 ];
+
+const taskStore = new TaskStore(TASKS_PATH, defaultTasks);
+const study = new StudyService();
+const studyRecords = new StudyRecordStore();
+const studyActions = new SkillActionRouter({
+    saveStudy: async (id, context) => studyRecords.save(study.record(id), context.consent),
+    deleteStudy: async (id, context) => {
+        if (!await studyRecords.delete(id, context.consent)) throw new Error('Study record not found.');
+        return { deleted: true };
+    },
+    createTask: async (id, context) => {
+        const record = await getStudyRecord(id, context.consent);
+        // Only the fixed review suggestion is persisted to Tasks, never the student's answer.
+        return taskStore.createStudyReview(record.id, record.nextReview.title,
+            `${record.nextReview.details}\nSuggested review: ${record.nextReview.suggestedAt}`);
+    },
+});
+
+async function getStudyRecord(id: string, consent: ConsentState) {
+    try { return study.record(id); }
+    catch (error) {
+        if (!(error instanceof StudyError) || error.status !== 404) throw error;
+        requireConsent(consent.study, 'Study record consent is required to read saved progress.');
+        const record = (await studyRecords.list(consent)).find(item => item.id === id);
+        if (!record) throw new StudyError('Study record not found.', 404);
+        return record;
+    }
+}
 
 const contentTypes: Record<string, string> = {
     '.html': 'text/html; charset=utf-8',
@@ -430,50 +456,30 @@ async function handleMemory(req: IncomingMessage, res: ServerResponse): Promise<
     return true;
 }
 
-async function loadTasks(): Promise<DashboardTask[]> {
-    try {
-        return JSON.parse(await readFile(TASKS_PATH, 'utf-8')) as DashboardTask[];
-    } catch (error) {
-        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
-            return defaultTasks;
-        }
-        throw error;
-    }
-}
-
-async function saveTasks(tasks: DashboardTask[]): Promise<void> {
-    await mkdir(dirname(TASKS_PATH), { recursive: true });
-    await writeFile(TASKS_PATH, `${JSON.stringify(tasks, null, 2)}\n`, 'utf-8');
-}
-
 async function handleTasks(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
     if (req.url !== '/api/tasks') {
         return false;
     }
 
     if (req.method === 'GET') {
-        respondJson(res, 200, { tasks: await loadTasks() });
+        respondJson(res, 200, { tasks: await taskStore.list() });
         return true;
     }
 
     if (req.method === 'POST') {
         const body = await parseBody(req);
         const title = typeof body['title'] === 'string' ? body['title'].trim() : '';
-        if (!title) {
-            respondJson(res, 400, { error: 'Task title is required.' });
+        const details = typeof body['details'] === 'string' ? body['details'].trim() : '';
+        if (!title || title.length > 300 || details.length > 10000) {
+            respondJson(res, 400, { error: 'Task title is required (up to 300 characters); details allow up to 10000 characters.' });
             return true;
         }
 
-        const task: DashboardTask = {
-            id: randomUUID(),
+        const task = await taskStore.create({
             title,
             kind: toDashboardTaskKind(body['kind']),
-            details: typeof body['details'] === 'string' ? body['details'].trim() : '',
-            done: false,
-            createdAt: new Date().toISOString(),
-        };
-        const tasks = await loadTasks();
-        await saveTasks([task, ...tasks]);
+            details,
+        });
         addLog('info', `Task created: ${task.title}.`);
         respondJson(res, 201, { task });
         return true;
@@ -482,14 +488,14 @@ async function handleTasks(req: IncomingMessage, res: ServerResponse): Promise<b
     if (req.method === 'PATCH') {
         const body = await parseBody(req);
         const id = typeof body['id'] === 'string' ? body['id'] : '';
-        const tasks = await loadTasks();
-        const task = tasks.find((item) => item.id === id);
+        if (typeof body['done'] !== 'boolean') {
+            respondJson(res, 400, { error: 'Task completion must be a boolean.' }); return true;
+        }
+        const task = await taskStore.setDone(id, body['done']);
         if (!task) {
             respondJson(res, 404, { error: 'Task not found.' });
             return true;
         }
-        task.done = Boolean(body['done']);
-        await saveTasks(tasks);
         addLog('info', `Task ${task.done ? 'completed' : 'reopened'}: ${task.title}.`);
         respondJson(res, 200, { task });
         return true;
@@ -497,6 +503,37 @@ async function handleTasks(req: IncomingMessage, res: ServerResponse): Promise<b
 
     respondJson(res, 405, { error: 'Method not allowed.' });
     return true;
+}
+
+async function handleStudy(req: IncomingMessage, res: ServerResponse, consent: ConsentState): Promise<boolean> {
+    const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+    if (!path.startsWith('/api/study/')) return false;
+    if (path === '/api/study/topics' && req.method === 'GET') {
+        respondJson(res, 200, { topics: study.topics() }); return true;
+    }
+    if (path === '/api/study/session' && req.method === 'POST') {
+        const body = await parseBody(req);
+        respondJson(res, 201, { session: study.start(body['topic']), avatar: studyExpression('question') }); return true;
+    }
+    if (path === '/api/study/answer' && req.method === 'POST') {
+        const body = await parseBody(req);
+        const record = study.answer(body['sessionId'], body['answer']);
+        respondJson(res, 200, { record, avatar: studyExpression('feedback', record.score === record.maxScore) }); return true;
+    }
+    if (path === '/api/study/records' && req.method === 'GET') {
+        respondJson(res, 200, { records: await studyRecords.list(consent) }); return true;
+    }
+    if (path === '/api/study/actions' && req.method === 'POST') {
+        const { approved, ...action } = await parseBody(req);
+        const outcome = await studyActions.execute(action, { consent, approved: approved === true });
+        const status = outcome.status === 'succeeded' ? 200 : outcome.status === 'denied' ? 403
+            : outcome.status === 'approval_required' ? 409 : 500;
+        respondJson(res, status, outcome); return true;
+    }
+    if (path === '/api/study/audit' && req.method === 'GET') {
+        respondJson(res, 200, { outcomes: studyActions.audit() }); return true;
+    }
+    respondJson(res, 405, { error: 'Unsupported study endpoint or method.' }); return true;
 }
 
 async function handleVision(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
@@ -626,6 +663,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse): Promise<boo
     if (path === '/api/vision' || path === '/api/vision/capture') requireConsent(consent.screen, 'Screen consent is required.');
     if (path === '/api/transcribe') requireConsent(consent.microphone, 'Microphone consent is required.');
     if (['/api/message', '/api/transcribe', '/api/voice/test'].includes(path)) requireCloudConsent(consent);
+
+    if (await handleStudy(req, res, consent)) return true;
 
     if (path === '/api/avatar' && req.method === 'GET') {
         respondJson(res, 200, { avatar: app.avatar.current, avatarBackend: toBodyBackend(process.env['ROBOT_BODY_BACKEND']) });
@@ -852,12 +891,22 @@ async function listenWithPortFallback(server: Server, preferredPort: number): Pr
 async function main(): Promise<void> {
     const server = createServer(async (req, res) => {
         try {
+            // This unauthenticated demo accepts only direct loopback, same-origin clients.
+            // Checking Host as well as Origin blocks DNS rebinding and foreign form posts.
+            const host = req.headers.host;
+            const localPort = req.socket.localPort;
+            if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '')
+                || ![`localhost:${localPort}`, `127.0.0.1:${localPort}`].includes(host ?? '')
+                || (req.headers.origin !== undefined && req.headers.origin !== `http://${host}`)
+                || req.headers['sec-fetch-site'] === 'cross-site') {
+                respondJson(res, 403, { error: 'A local same-origin client is required.' }); return;
+            }
             const wasApiHandled = await handleApi(req, res);
             if (wasApiHandled) return;
             await serveStatic(req, res);
         } catch (error) {
-            const status = error instanceof ConsentError ? 403 : error instanceof SyntaxError ? 400 : 500;
-            respondJson(res, status, { error: error instanceof ConsentError ? error.message : status === 400 ? 'Malformed JSON.' : 'Request failed.' });
+            const status = error instanceof ConsentError ? 403 : error instanceof StudyError ? error.status : error instanceof SyntaxError ? 400 : 500;
+            respondJson(res, status, { error: error instanceof ConsentError || error instanceof StudyError ? error.message : status === 400 ? 'Malformed JSON.' : 'Request failed.' });
         }
     });
 

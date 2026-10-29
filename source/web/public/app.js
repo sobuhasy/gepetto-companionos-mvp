@@ -260,7 +260,7 @@ function addMessage(role, text, imageUrl = null, senderLabel = null) {
 }
 
 function getConsent() {
-  const consent = { microphone: false, camera: false, screen: false, memory: false, localFirst: true };
+  const consent = { microphone: false, camera: false, screen: false, memory: false, study: false, localFirst: true };
   document.querySelectorAll('[data-privacy]').forEach(input => { consent[input.dataset.privacy] = input.checked; });
   return consent;
 }
@@ -270,7 +270,7 @@ async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.error ?? `Request failed: ${response.status}`);
+    throw new Error(payload.error ?? payload.reason ?? `Request failed: ${response.status}`);
   }
   return payload;
 }
@@ -288,6 +288,8 @@ let presentationGeneration = 0;
 let renderedPresentation = null;
 let avatarPageClosed = false;
 let avatarResponsePending = false;
+let studyVisualState = null;
+let runtimeAvatarState = { activity: 'idle', emotion: 'neutral' };
 const nativeRenderer = new NativeLive2DRenderer(document.getElementById('live2d-canvas'), {
   onStatus({ status, message, missingParameters = [] }) {
     avatarRenderStatus.textContent = message;
@@ -303,8 +305,8 @@ const avatarMedia = new AvatarMediaSession(body => fetchJson('/api/avatar', {
 }), undefined, {
   onState(avatar) {
     ++avatarStateVersion;
-    nativeRenderer.setState(avatar);
-    avatarStateLabel.textContent = `${avatar.activity} · ${avatar.emotion}`;
+    runtimeAvatarState = avatar;
+    renderAvatarPresentation();
     if (!conversationError) {
       const feedback = { idle: 'Ready when you are', listening: 'Listening… tap the microphone to finish', thinking: isTranscribing ? 'Transcribing your voice…' : 'Thinking…', speaking: 'Speaking… you can interrupt at any time' };
       showConversationStatus(feedback[avatar.activity] || feedback.idle, avatar.activity);
@@ -312,6 +314,13 @@ const avatarMedia = new AvatarMediaSession(body => fetchJson('/api/avatar', {
   },
   onMouth: level => nativeRenderer.setMouth(level),
 });
+
+function renderAvatarPresentation() {
+  const visual = runtimeAvatarState.activity === 'idle' && !avatarMedia.id && studyVisualState
+    ? studyVisualState : runtimeAvatarState;
+  nativeRenderer.setState(visual);
+  avatarStateLabel.textContent = `${visual.activity} · ${visual.emotion}`;
+}
 
 function observeAvatarState(avatar) {
   // A text-only response resets the server owner before its HTTP reply arrives.
@@ -393,6 +402,7 @@ autoPlayToggle.addEventListener('change', () => {
 });
 window.addEventListener('pagehide', () => {
   avatarPageClosed = true;
+  studySession?.dispose();
   clearInterval(avatarPollTimer);
   if (avatarMedia.id) fetch('/api/avatar', {
     method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
@@ -631,11 +641,14 @@ async function loadTasks() {
       await loadSystemStatus();
     });
     const text = document.createElement('span');
-    text.innerHTML = `<strong>${task.title}</strong><small>${task.kind} · ${task.details || 'No details'}</small>`;
+    const title = document.createElement('strong'); title.textContent = task.title;
+    const details = document.createElement('small'); details.textContent = `${task.kind} · ${task.details || 'No details'}`;
+    text.append(title, details);
     row.appendChild(checkbox);
     row.appendChild(text);
     taskList.appendChild(row);
   });
+  return payload.tasks;
 }
 
 imageUpload.addEventListener('change', (e) => {
@@ -1006,12 +1019,15 @@ function setActiveMode(mode) {
 function loadPrivacyControls() {
   document.querySelectorAll('[data-privacy]').forEach((input) => {
     const key = `gepetto-privacy-${input.dataset.privacy}`;
-    const stored = localStorage.getItem(key);
+    // Study persistence always needs a fresh explicit grant for this visit.
+    const stored = input.dataset.privacy === 'study' ? null : localStorage.getItem(key);
+    if (input.dataset.privacy === 'study') input.checked = false;
     if (stored !== null) {
       input.checked = stored === 'true';
     }
     input.addEventListener('change', () => {
-      localStorage.setItem(key, String(input.checked));
+      if (input.dataset.privacy !== 'study') localStorage.setItem(key, String(input.checked));
+      if (input.dataset.privacy === 'study') studySession?.consentChanged();
       if (!getConsent().microphone && isRecording && mediaRecorder) mediaRecorder.stop();
       if (!getConsent().screen) { visionPreview.replaceChildren(); visionStatus.textContent = 'Screen consent disabled.'; }
       if (!getConsent().camera) removeImageBtn.click();
@@ -1047,6 +1063,20 @@ revokeAccessButton?.addEventListener('click', () => {
   visionStatus.textContent = 'Screen consent disabled.';
   if (presenceMemory) presenceMemory.textContent = 'Memory paused';
   if (presencePrivacy) presencePrivacy.textContent = 'Access revoked';
+  studySession?.consentChanged();
+});
+
+const studySession = typeof RoboticsStudySession === 'undefined' ? null : new RoboticsStudySession({
+  element: id => document.getElementById(id), request: fetchJson, getConsent,
+  refreshTasks: loadTasks, approve: message => window.confirm(message),
+  onActivity(activity) {
+    // Browser expression only. Media ownership always takes precedence; no body command is sent.
+    studyVisualState = activity === 'closed' ? null : {
+      activity: activity === 'answering' ? 'listening' : activity === 'checking' ? 'thinking' : 'idle',
+      emotion: activity === 'correct' ? 'amazed' : 'neutral',
+    };
+    renderAvatarPresentation();
+  },
 });
 
 setActiveMode(activeMode);

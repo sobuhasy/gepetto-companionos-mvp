@@ -14,6 +14,7 @@ Thumbs.db
 data/ltm/memories.jsonl
 data/companion/generated-profile.json
 data/dashboard/tasks.json
+data/study/
 
 # User-installed official Live2D runtime and authorized private model assets.
 /Live2DModels/
