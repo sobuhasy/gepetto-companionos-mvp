@@ -113,6 +113,14 @@ Privacy defaults remain local-first with microphone, images, screen context, and
 npm run start:cli
 ```
 
+## Robotics study session
+
+Open **Robotics study** above the conversation to practice rotation matrices or planar FK/IK. Questions, numeric scoring, feedback, worked mathematical steps, and review suggestions run locally without an API key. The existing Live2D companion remains mounted.
+
+Results are unsaved by default. **Privacy & Permissions → Local study records** grants access for the current visit; each save and deletion still requires an explicit review. **Review & create task** asks approval and verifies the task in the existing persisted task list before reporting success. Review suggestions are not scheduled reminders. External tools remain disabled.
+
+See [architecture, manual demo, tests, and limitations](docs/robotics-study-session.md). The unauthenticated server binds to `127.0.0.1` and accepts direct localhost/127.0.0.1 hosts and same-origin requests only.
+
 ## Troubleshooting
 
 ### Port 3000 is already in use

@@ -3,11 +3,12 @@ export type ConsentState = {
     camera: boolean;
     screen: boolean;
     memory: boolean;
+    study: boolean;
     localFirst: boolean;
 };
 
 export const DEFAULT_CONSENT: Readonly<ConsentState> = Object.freeze({
-    microphone: false, camera: false, screen: false, memory: false, localFirst: true,
+    microphone: false, camera: false, screen: false, memory: false, study: false, localFirst: true,
 });
 
 export function parseConsent(value: unknown): ConsentState {
@@ -17,6 +18,7 @@ export function parseConsent(value: unknown): ConsentState {
         camera: input['camera'] === true,
         screen: input['screen'] === true,
         memory: input['memory'] === true,
+        study: input['study'] === true,
         localFirst: input['localFirst'] !== false,
     };
 }
